@@ -182,6 +182,7 @@ def test_invalid_thread_id_sends_nothing(
     run("kev", now=NOW)
     monkeypatch.setenv("TELEGRAM_THREAD_ID", value)
     assert run("push", now=NOW) == 2
+    assert run("digest", now=NOW) == 2
     assert fake.sent == []
 
 

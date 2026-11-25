@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 import httpx
 import pytest
 
+from starfault.gemini import GeminiError
 from starfault.translate import (
     FAILURES_FILE,
     TRANSLATIONS_FILE,
@@ -25,6 +27,9 @@ from starfault.translate import (
     translate_with_claude,
     translate_with_gemini,
 )
+from tests.builders import config_text, cve
+from tests.conftest import Run
+from tests.fakes import FakeSources
 from tests.json_schema import object_schemas
 
 TEXTS = ["Popular", "Known", "Shared  text", "Shared text", ""]
@@ -211,3 +216,71 @@ def test_claude_translator() -> None:
         translate_with_claude(_claude("max_tokens", "{}"), "m", [("k", "x")], target="zh-TW")
     with pytest.raises(TranslateError, match="沒有文字內容"):
         translate_with_claude(_claude("end_turn", None), "m", [("k", "x")], target="zh-TW")
+
+
+NOW = datetime(2026, 11, 25, 22, 30, tzinfo=UTC)
+TITLE = "Pellmar CivicForms hard-coded credentials"
+
+
+def _watch_one(run: Run, fake: FakeSources) -> None:
+    rec = cve("CVE-2026-95001", published="2026-11-25T02:00:00Z", score=9.8, title=TITLE)
+    fake.eod[date(2026, 11, 24)] = [rec]
+    assert run("cve", now=NOW) == 0
+
+
+def test_cli_translates_site_titles_and_digest_uses_them(
+    run: Run, fake: FakeSources, workdir: Path, monkeypatch: pytest.MonkeyPatch, telegram: None
+) -> None:
+    _watch_one(run, fake)
+    seen: list[str] = []
+
+    def generate(api_key: str, models: Any, system: str, prompt: str, *a: Any, **k: Any) -> str:
+        items = json.loads(prompt)["items"]
+        seen.extend(i["text"] for i in items)
+        return json.dumps(
+            {"items": [{"id": i["id"], "text": "譯：" + i["text"][:10]} for i in items]}
+        )
+
+    monkeypatch.setenv("GEMINI_API_KEY", "key")
+    monkeypatch.setattr("starfault.gemini.generate_json_with_fallback", generate)
+    assert run("translate", now=NOW) == 0
+    assert seen[0] == TITLE
+    assert run("digest", now=NOW) == 0
+    assert "譯：Pellmar Ci" in fake.sent[0].text
+
+
+def test_cli_failure_returns_zero_and_digest_uses_original(
+    run: Run, fake: FakeSources, workdir: Path, monkeypatch: pytest.MonkeyPatch, telegram: None
+) -> None:
+    _watch_one(run, fake)
+
+    def fail(*args: Any, **kwargs: Any) -> str:
+        raise GeminiError("Gemini 回應 429")
+
+    monkeypatch.setenv("GEMINI_API_KEY", "key")
+    monkeypatch.setattr("starfault.gemini.generate_json_with_fallback", fail)
+    assert run("translate", now=NOW) == 0
+    assert run("digest", now=NOW) == 0
+    assert TITLE in fake.sent[0].text
+
+
+@pytest.mark.parametrize("values", [{"target": ""}, {"max_per_run": 0}, {}])
+def test_cli_skips(
+    run: Run,
+    fake: FakeSources,
+    workdir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    values: dict[str, Any],
+) -> None:
+    """沒有目標語言、上限為 0，或沒有 API key 時不呼叫模型。"""
+    if values:
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+    (workdir / "config.toml").write_text(config_text(**values))
+    _watch_one(run, fake)
+
+    def boom(*args: Any, **kwargs: Any) -> str:
+        raise AssertionError("不應呼叫模型")
+
+    monkeypatch.setattr("starfault.gemini.generate_json_with_fallback", boom)
+    assert run("translate", now=NOW) == 0
+    assert not (workdir / "state" / TRANSLATIONS_FILE).exists()

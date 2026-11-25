@@ -10,23 +10,24 @@ import logging
 import os
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
 
 from starfault import cvelist, epss, kev, notify, track, translate, watchlist
-from starfault.config import Config, ConfigError, load_config
+from starfault.config import Config, ConfigError, TranslationConfig, load_config
 from starfault.epss import EpssFormatError
 from starfault.http import FetchError, Http
 from starfault.kev import KevFormatError
 from starfault.messages import MESSAGES
+from starfault.records import CveRecord
 from starfault.site import build_site
 from starfault.site_page import detect_repo
 from starfault.state import State
 from starfault.telegram import TelegramError, TelegramSender
-from starfault.view import pct_text
+from starfault.view import build_view, pct_text
 
 log = logging.getLogger("starfault")
 
@@ -262,6 +263,121 @@ def cmd_epss(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
     return 0
 
 
+def _translator(cfg: TranslationConfig, target: str) -> translate.Translator | None:
+    """依供應商建立翻成 target 的翻譯函式；沒有對應的 API key 時回傳 None。"""
+    if cfg.provider == "gemini":
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            return None
+        models = cfg.models
+        return lambda batch: translate.translate_with_gemini(api_key, models, batch, target=target)
+    if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        return None
+    import anthropic
+
+    client = anthropic.Anthropic()
+
+    def run(batch: Sequence[tuple[str, str]]) -> dict[str, str]:
+        try:
+            return translate.translate_with_claude(client, cfg.model, batch, target=target)
+        except anthropic.APIStatusError as e:
+            raise translate.TranslateError(f"API 回應 {e.status_code}") from e
+        except anthropic.APIConnectionError as e:
+            raise translate.TranslateError("無法連線到 Claude API") from e
+
+    return run
+
+
+def translation_texts(state: State, cfg: Config, today: date) -> list[str]:
+    """要翻譯的文字：網站收錄的 CVE，關注 CVE 依最新事件、再來 KEV 依列入日期；標題在描述前。"""
+    view = build_view(state, cfg, today)
+    texts: list[str] = []
+    for e in (*view.cves, *view.kev):
+        texts += [e.title, e.desc]
+    return texts
+
+
+def cmd_translate(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
+    """翻譯失敗只記警告並回傳 0：沒有譯文時各處顯示原文，下次執行再補。"""
+    target = cfg.translation.target
+    if not target:
+        log.info("translation.target 為空字串，略過翻譯")
+        return 0
+    if cfg.translation.max_per_run == 0:
+        log.info("translation.max_per_run 為 0，略過翻譯")
+        return 0
+    translator = _translator(cfg.translation, target)
+    if translator is None:
+        log.warning("未設定 %s 的 API key，略過翻譯", cfg.translation.provider)
+        return 0
+    state = State(args.state)
+    result = translate.translate_pending(
+        translation_texts(state, cfg, _today(cfg, env.now())),
+        state.root,
+        translator,
+        lang=target,
+        batch_size=cfg.translation.batch_size,
+        max_per_run=cfg.translation.max_per_run,
+        interval_seconds=cfg.translation.request_interval_seconds,
+    )
+    log.info(
+        "翻譯 %d 則、失敗 %d 則，剩下 %d 則還沒有譯文",
+        result.translated,
+        result.failed,
+        result.remaining,
+    )
+    if result.error:
+        log.warning("連續失敗，提前停止：%s", result.error)
+    return 0
+
+
+def cmd_digest(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
+    state = State(args.state)
+    stack = _watchlist(args)
+    sender = _telegram(env)
+    if sender is None:
+        log.info("未設定 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，略過每日摘要")
+        return 0
+    now = env.now()
+    http = env.http()
+
+    def load_records(days: list[date]) -> Mapping[str, CveRecord]:
+        return cvelist.fetch_utc_days(http, days, now.astimezone(UTC)).records
+
+    try:
+        digest = notify.build_digest(
+            state,
+            cfg,
+            MESSAGES[cfg.site.locale],
+            _translations(state, cfg),
+            stack,
+            load_records,
+            now=now,
+        )
+        notify.send_digest(
+            state,
+            digest,
+            lambda m: sender.send(m.text, silent=m.silent, buttons=m.buttons),
+            now=now,
+        )
+    except FetchError as e:
+        log.error("讀取 CVE 紀錄失敗：%s", e)
+        return EXIT_FAILED
+    except TelegramError as e:
+        log.error("Telegram 發送失敗：%s", e)
+        return EXIT_FAILED
+    finally:
+        http.close()
+        sender.close()
+    log.info(
+        "每日摘要%s：EPSS %d 則、Critical %d 則",
+        "已發送" if digest.message else "沒有內容，不發送",
+        digest.epss,
+        digest.critical,
+    )
+    return 0
+
+
 def cmd_site(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
     state = State(args.state)
     stats = build_site(
@@ -296,6 +412,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--backfill-days", type=int, metavar="N", help="改為重新讀取今天以前 N 個 UTC 日的 delta"
     )
     sub.add_parser("epss", help="讀取 EPSS，記錄分數與首次跨過門檻的 CVE")
+    sub.add_parser("translate", help="翻譯網站收錄的 CVE 標題與描述（需要 API key）")
+    sub.add_parser("digest", help="發送每日摘要（需要 TELEGRAM_BOT_TOKEN、TELEGRAM_CHAT_ID）")
     p_site = sub.add_parser("site", help="產生網站")
     p_site.add_argument("--out", type=Path, default=Path("_site"), help="輸出目錄，會先清空")
     p_site.add_argument("--web", type=Path, default=Path("web"), help="前端靜態檔目錄")
@@ -308,6 +426,8 @@ _COMMANDS = {
     "push": cmd_push,
     "cve": cmd_cve,
     "epss": cmd_epss,
+    "translate": cmd_translate,
+    "digest": cmd_digest,
     "site": cmd_site,
 }
 
