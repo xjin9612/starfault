@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from starfault.notify import detail_url
 from starfault.view import pct_text
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -75,3 +76,4 @@ def test_frontend_formats_match_backend() -> None:
     )
     assert pct in app
     assert "const cveHref = id => '#/cve/' + encodeURIComponent(id);" in app
+    assert detail_url("https://x.test/", "CVE-2026-1") == "https://x.test/#/cve/CVE-2026-1"

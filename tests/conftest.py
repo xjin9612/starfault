@@ -50,8 +50,16 @@ def _no_ambient_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def run(workdir: Path, fake: FakeSources) -> Run:
     """以 workdir 的設定與 state/ 執行 starfault 指令。"""
 
-    def call(*args: str, now: datetime) -> int:
-        argv = ["--config", str(workdir / "config.toml"), "--state", str(workdir / "state"), *args]
+    def call(*args: str, now: datetime, watchlist: Path | None = None) -> int:
+        argv = [
+            "--config",
+            str(workdir / "config.toml"),
+            "--state",
+            str(workdir / "state"),
+            "--watchlist",
+            str(watchlist or workdir / "watchlist.toml"),
+            *args,
+        ]
         return main(argv, transport=fake.transport(), now=now)
 
     return call

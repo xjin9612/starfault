@@ -1,10 +1,14 @@
-"""命令列入口。指令說明見 docs/DEVELOPMENT.md「命令列」。"""
+"""命令列入口。指令說明見 docs/DEVELOPMENT.md「命令列」。
+
+log 會出現在公開 repo 的 Actions 頁面：不得印出技術棧清單的內容、命中的 CVE 或命中數。
+"""
 
 from __future__ import annotations
 
 import argparse
 import logging
 import os
+import re
 import sys
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
@@ -12,19 +16,21 @@ from pathlib import Path
 
 import httpx
 
-from starfault import cvelist, epss, kev, track, translate
+from starfault import cvelist, epss, kev, notify, track, translate, watchlist
 from starfault.config import Config, ConfigError, load_config
 from starfault.epss import EpssFormatError
 from starfault.http import FetchError, Http
 from starfault.kev import KevFormatError
+from starfault.messages import MESSAGES
 from starfault.site import build_site
 from starfault.site_page import detect_repo
 from starfault.state import State
+from starfault.telegram import TelegramError, TelegramSender
 from starfault.view import pct_text
 
 log = logging.getLogger("starfault")
 
-# 資料來源讀取失敗；已取得的資料照常寫入。
+# 資料來源或發送失敗；已取得的資料照常寫入。
 EXIT_FAILED = 1
 # 設定錯誤或缺少必要的環境變數，沒有執行任何工作。
 EXIT_USAGE = 2
@@ -34,6 +40,8 @@ RECORD_BUDGET = 100
 MAX_EOD_DAYS = 7
 # --backfill-days 的上限，與每日紀錄的保留天數相同。
 MAX_BACKFILL_DAYS = 90
+
+_THREAD_ID = re.compile(r"[0-9]+")
 
 
 class UsageError(Exception):
@@ -52,6 +60,35 @@ class _Env:
 
     def http(self) -> Http:
         return Http(transport=self.transport)
+
+
+def thread_id(value: str) -> int | None:
+    """解析 TELEGRAM_THREAD_ID：空白回傳 None，不是正整數時丟出 UsageError。"""
+    value = value.strip()
+    if not value:
+        return None
+    if not _THREAD_ID.fullmatch(value) or int(value) < 1:
+        raise UsageError(f"TELEGRAM_THREAD_ID 必須是正整數：{value!r}")
+    return int(value)
+
+
+def _telegram(env: _Env) -> TelegramSender | None:
+    """未設定 bot token 或 chat ID 時回傳 None。"""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    thread = thread_id(os.environ.get("TELEGRAM_THREAD_ID", ""))
+    if not token or not chat_id:
+        return None
+    if thread is not None:
+        log.info("發送到群組主題 %d", thread)
+    return TelegramSender(token, chat_id, thread_id=thread, transport=env.transport)
+
+
+def _watchlist(args: argparse.Namespace) -> watchlist.Watchlist:
+    try:
+        return watchlist.load(os.environ, args.watchlist)
+    except watchlist.WatchlistError as e:
+        raise UsageError(f"技術棧清單格式錯誤：{e}") from None
 
 
 def _translations(state: State, cfg: Config) -> dict[str, str]:
@@ -107,6 +144,32 @@ def cmd_kev(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
         )
     missing = len(set(catalog.entries) - set(state.load_watch()))
     log.info("KEV 紀錄：取得 %d 筆、失敗 %d 筆，還有 %d 筆沒有完整紀錄", fetched, failed, missing)
+    return 0
+
+
+def cmd_push(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
+    state = State(args.state)
+    stack = _watchlist(args)
+    sender = _telegram(env)
+    if sender is None:
+        log.info("未設定 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，略過推播")
+    try:
+        result = notify.push_kev(
+            state,
+            cfg,
+            MESSAGES[cfg.site.locale],
+            _translations(state, cfg),
+            stack,
+            (lambda m: sender.send(m.text, silent=m.silent, buttons=m.buttons)) if sender else None,
+            now=env.now(),
+        )
+    except TelegramError as e:
+        log.error("Telegram 發送失敗：%s", e)
+        return EXIT_FAILED
+    finally:
+        if sender:
+            sender.close()
+    log.info("KEV 推播：發送 %d 則，略過 %d 則", result.sent, result.skipped)
     return 0
 
 
@@ -219,8 +282,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="starfault", description="每日 CVE 儀表板")
     parser.add_argument("--config", type=Path, default=Path("config.toml"), help="設定檔")
     parser.add_argument("--state", type=Path, default=Path("state"), help="狀態檔目錄")
+    parser.add_argument(
+        "--watchlist",
+        type=Path,
+        default=Path("watchlist.toml"),
+        help="技術棧清單；環境變數 STARFAULT_WATCHLIST 有值時改用它",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("kev", help="讀取 KEV，更新快照與待推播清單，補抓 KEV 的 CVE 紀錄")
+    sub.add_parser("push", help="推播 KEV 新增（需要 TELEGRAM_BOT_TOKEN、TELEGRAM_CHAT_ID）")
     p_cve = sub.add_parser("cve", help="讀取 cvelistV5 的 delta，更新每日新 CVE 與關注清單")
     p_cve.add_argument(
         "--backfill-days", type=int, metavar="N", help="改為重新讀取今天以前 N 個 UTC 日的 delta"
@@ -235,6 +305,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 _COMMANDS = {
     "kev": cmd_kev,
+    "push": cmd_push,
     "cve": cmd_cve,
     "epss": cmd_epss,
     "site": cmd_site,
