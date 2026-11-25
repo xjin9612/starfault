@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starfault"
+version = "0.1.0"
+description = "每日 CVE 儀表板：追蹤 CISA KEV 新增、EPSS 升溫與 Critical 漏洞，並以 Telegram 推播"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+dependencies = [
+  "anthropic>=2.12",
+  "httpx>=0.28",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=2.4",
+  "playwright>=1.65",
+  "pytest>=9.2",
+  "ruff>=0.17",
+]
+
+[project.scripts]
+starfault = "starfault.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "-m", "not e2e"]
+markers = ["e2e: 瀏覽器測試（tests/e2e），預設不執行，用 pytest -m e2e 執行"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# 全形標點是繁中文字的正常寫法。
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
