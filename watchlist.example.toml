@@ -1,0 +1,19 @@
+# 技術棧清單的範例，內容是虛構的產品。
+# 實際的清單存成 GitHub secret STARFAULT_WATCHLIST；本機測試時寫在 watchlist.toml（不進版控）。
+# 格式與比對規則見 docs/DEVELOPMENT.md「技術棧特別關注」。
+
+[[product]]
+# 推播顯示的名稱。
+name = "Example Proxy"
+# 產品名稱的各種寫法，至少一個；以完整詞比對，大小寫與標點不影響。
+match = ["example proxy", "exproxy"]
+# 選填：限定廠商，排除同名產品。
+vendors = ["example labs"]
+# 選填：顯示在推播。
+note = "前端代理"
+
+[[product]]
+name = "Sample Runtime"
+match = ["sample runtime", "sample se", "srt"]
+vendors = ["sample foundation", "sample corp"]
+note = "應用程式執行環境"

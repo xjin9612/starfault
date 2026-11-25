@@ -14,7 +14,7 @@ _site/
 .cache/
 
 # 技術棧清單：只放在 secret STARFAULT_WATCHLIST 與本機
-watchlist.toml
+/watchlist.toml
 
 # 機敏設定
 .env

@@ -1,0 +1,25 @@
+# 測試用的虛構技術棧清單。產品、廠商與備註都是虛構的。
+
+[[product]]
+name = "Lantern CMS"
+match = ["lantern cms", "lanterncms"]
+vendors = ["lantern labs"]
+note = "對外網站"
+
+[[product]]
+name = "Harbor Print"
+match = ["harbor print", "harborprint", "hps"]
+vendors = ["tidewater", "harbor print project", "mooring systems"]
+note = "辦公室印表機"
+
+[[product]]
+name = "Quillstore"
+match = ["quillstore"]
+vendors = ["quillstore"]
+note = "文件庫"
+
+[[product]]
+name = "Gullwing Router"
+match = ["gullwing router", "gullwing-router", "gullwingos"]
+vendors = ["gullwing networks", "gullwing"]
+note = "分店路由器"
