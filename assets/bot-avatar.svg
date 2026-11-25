@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>地質學家（Geologist）</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e3a8a"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fef3c7"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.22"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <path d="M0 330 Q256 268 512 330 V512 H0 Z" fill="#2dd4bf"/>
+  <path d="M0 392 Q256 330 512 392 V512 H0 Z" fill="#fbbf24"/>
+  <path d="M0 454 Q256 392 512 454 V512 H0 Z" fill="#f97316"/>
+  <g transform="rotate(-38 256 230)">
+    <rect x="244" y="150" width="24" height="230" rx="10" fill="#c08457"/>
+    <rect x="244" y="150" width="24" height="230" rx="10" fill="url(#sheen)"/>
+    <path d="M168 120 H322 Q344 120 352 140 L360 160 H168 Z" fill="#cbd5e1"/>
+    <path d="M168 120 H200 V160 H168 Z" fill="#94a3b8"/>
+    <path d="M322 120 Q344 120 352 140 L360 160 H322 Z" fill="#e2e8f0"/>
+  </g>
+  <polygon points="392.0,62.0 403.2,92.6 435.7,93.8 410.1,113.9 419.0,145.2 392.0,127.0 365.0,145.2 373.9,113.9 348.3,93.8 380.8,92.6" fill="url(#star)" stroke="#fef3c7" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="110" cy="120" r="5" fill="#fef3c7" opacity="0.6"/>
+  <circle cx="160" cy="70" r="4" fill="#fef3c7" opacity="0.5"/>
+</svg>

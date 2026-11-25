@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <title>starfault</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e3a8a"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7ed"/><stop offset="1" stop-color="#fb923c"/></linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7ed"/><stop offset="1" stop-color="#fdba74" stop-opacity="0.6"/></linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#sky)"/>
+  <path d="M1000 432 L1024 390 L1024 640 L955 640 Z" fill="#7c2d12"/>
+  <path d="M0 470 C320 460 640 438 1010 430 L960 640 H0 Z" fill="#fed7aa"/><path d="M1022 390 C1130 384 1200 376 1280 372 V640 H972 Z" fill="#fed7aa"/><path d="M0 516 C320 506 640 484 1010 476 L960 640 H0 Z" fill="#fb923c"/><path d="M1022 436 C1130 430 1200 422 1280 418 V640 H972 Z" fill="#fb923c"/><path d="M0 562 C320 552 640 530 1010 522 L960 640 H0 Z" fill="#ea580c"/><path d="M1022 482 C1130 476 1200 468 1280 464 V640 H972 Z" fill="#ea580c"/><path d="M0 608 C320 598 640 576 1010 568 L960 640 H0 Z" fill="#9a3412"/><path d="M1022 528 C1130 522 1200 514 1280 510 V640 H972 Z" fill="#9a3412"/>
+  <path d="M1030 392 L1010 432 L1022 500 L992 580 L970 640" stroke="url(#glow)" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="1150.0,92.0 1164.1,130.6 1205.2,132.1 1172.8,157.4 1184.1,196.9 1150.0,174.0 1115.9,196.9 1127.2,157.4 1094.8,132.1 1135.9,130.6" fill="url(#star)" stroke="#fff7ed" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="900" cy="110" r="5" fill="#fff7ed" opacity="0.6"/>
+  <circle cx="1220" cy="300" r="5" fill="#fff7ed" opacity="0.5"/>
+  <circle cx="780" cy="230" r="4" fill="#fff7ed" opacity="0.5"/>
+  <text x="96" y="200" font-family="Liberation Sans, DejaVu Sans, sans-serif" font-size="112" font-weight="700" fill="#f8fafc">starfault</text>
+  <text x="100" y="272" font-family="Liberation Sans, DejaVu Sans, sans-serif" font-size="38" fill="#cbd5e1">Daily CVE watch: KEV, EPSS, critical</text>
+  <text x="100" y="330" font-family="Noto Sans CJK TC, sans-serif" font-size="34" fill="#94a3b8">每日 CVE 儀表板：已遭利用、EPSS 升溫、Critical</text>
+</svg>

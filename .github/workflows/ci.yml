@@ -31,3 +31,21 @@ jobs:
       - name: pytest
         run: uv run pytest
 
+  e2e:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.10"
+          python-version: "3.14"
+      - name: 安裝相依套件（依 uv.lock）
+        run: uv sync --locked
+      # 瀏覽器由 Playwright 自己下載，不在 uv.lock 的雜湊驗證範圍內。
+      - name: 安裝 Chromium
+        run: uv run playwright install --with-deps chromium
+      - name: 瀏覽器測試
+        run: uv run pytest -m e2e

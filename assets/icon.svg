@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>starfault</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e3a8a"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7ed"/><stop offset="1" stop-color="#fb923c"/></linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7ed"/><stop offset="1" stop-color="#fdba74" stop-opacity="0.6"/></linearGradient>
+  </defs>
+  <clipPath id="tile"><rect width="512" height="512" rx="112"/></clipPath>
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="url(#sky)"/>
+    <path d="M252 252 L274 204 L274 512 L215 512 Z" fill="#7c2d12"/>
+    <path d="M0 272 C102.4 263.2 183.39999999999998 254 262 250 L215.92000000000002 512 H0 Z" fill="#fed7aa"/><path d="M272.24 204 C390.0 198 409.6 195.2 512 188.6 V512 H226.16000000000003 Z" fill="#fed7aa"/><path d="M0 330 C102.4 321.2 183.39999999999998 312 262 308 L215.92000000000002 512 H0 Z" fill="#fb923c"/><path d="M272.24 262 C390.0 256 409.6 253.2 512 246.6 V512 H226.16000000000003 Z" fill="#fb923c"/><path d="M0 388 C102.4 379.2 183.39999999999998 370 262 366 L215.92000000000002 512 H0 Z" fill="#ea580c"/><path d="M272.24 320 C390.0 314 409.6 311.2 512 304.6 V512 H226.16000000000003 Z" fill="#ea580c"/><path d="M0 446 C102.4 437.2 183.39999999999998 428 262 424 L215.92000000000002 512 H0 Z" fill="#9a3412"/><path d="M272.24 378 C390.0 372 409.6 369.2 512 362.6 V512 H226.16000000000003 Z" fill="#9a3412"/>
+    <path d="M274 206 L258 255 L272 330 L248 420 L228 512" stroke="url(#glow)" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="132.0,66.0 144.9,100.2 181.5,101.9 152.9,124.8 162.6,160.1 132.0,140.0 101.4,160.1 111.1,124.8 82.5,101.9 119.1,100.2" fill="url(#star)" stroke="#fff7ed" stroke-width="6" stroke-linejoin="round"/>
+    <circle cx="400" cy="90" r="5" fill="#fff7ed" opacity="0.7"/>
+    <circle cx="300" cy="64" r="4" fill="#fff7ed" opacity="0.5"/>
+    <circle cx="440" cy="170" r="4" fill="#fff7ed" opacity="0.5"/>
+  </g>
+</svg>
