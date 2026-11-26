@@ -103,7 +103,7 @@ def test_meta(site: Path) -> None:
         "count": 2,
     }
     assert meta["sources"]["epss"]["date"] == "2026-11-25"
-    assert meta["counts"] == {"new_today": 0, "kev_7d": 1, "epss_7d": 1, "critical_7d": 1}
+    assert "counts" not in meta
 
 
 def test_cves_items(site: Path) -> None:
@@ -281,10 +281,9 @@ def test_window_boundaries(run: Run, workdir: Path, monkeypatch: pytest.MonkeyPa
     for age in (30, 29):
         state.save_daily(Daily(_days_ago(age)))
     site = _site_from_state(run, workdir, monkeypatch)
-    # 關注 CVE 收錄最後事件在近 90 天內的；近 7 天、圖表 30 天都含今天。
+    # 關注 CVE 收錄最後事件在近 90 天內的；圖表 30 天含今天。
     ids = {i["id"] for i in _load(site, "cves")["items"]}
     assert ids == {"CVE-2026-93101", "CVE-2026-93103", "CVE-2026-93104"}
-    assert _load(site, "meta")["counts"]["epss_7d"] == 1
     days = _load(site, "daily")["days"]
     assert days[0]["date"] == _days_ago(29).isoformat() and len(days) == 30
 

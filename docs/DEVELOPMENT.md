@@ -243,7 +243,7 @@ note = "前端代理"                  # 選填：顯示在推播
 
 | 檔案 | 內容 |
 |---|---|
-| `meta.json` | `generated_at`、`locale`、`timezone`、`today`、`translation`（目標語言或空字串）、`thresholds`（`epss`、`cvss`、`epss_window_days`、`stack_cvss`、`calibrating_until`）、`sources`（`cve`／`kev`／`epss` 的 `at`、`ok`；KEV 另有 `version`、`count`，EPSS 另有 `date`）、`counts`（`new_today`、`kev_7d`、`epss_7d`、`critical_7d`） |
+| `meta.json` | `generated_at`、`locale`、`timezone`、`today`、`translation`（目標語言或空字串）、`thresholds`（`epss`、`cvss`、`epss_window_days`、`stack_cvss`、`calibrating_until`）、`sources`（`cve`／`kev`／`epss` 的 `at`、`ok`；KEV 另有 `version`、`count`，EPSS 另有 `date`） |
 | `cves.json` | `items[]`：`id, title, title_tr, vendor, product, published, cvss{score, version, sev, source} \| null, epss{s, p, date} \| null, epss_cross, kev{added, due, ransomware, triage} \| null, reasons[]`；最新事件在前 |
 | `kev.json` | `items[]`：`id, title, title_tr, vendor, product, cvss, epss, added, due, ransomware, triage`；列入日期新的在前 |
 | `cve/<CVE>.json` | `id, desc, desc_tr, cvss{…, vector}, cwe[{id, name}], affected[{vendor, product, versions, fixed}], references[{url, tags}], epss_hist[{d, s, p}], kev{…, action, notes} \| null, timeline[{date, type}]` |
@@ -252,7 +252,8 @@ note = "前端代理"                  # 選填：顯示在推播
 
 - `cves.json` 收錄 KEV 與關注清單中，最後一個事件（發布、列入 KEV、EPSS 跨過門檻）在近 90 天內、符合任一原因的 CVE。
 - `reasons`：`kev`（在 KEV）、`epss`（有 `epss_cross`）、`critical`（曾符合 Critical 規則且 CVSS 仍 ≥ 門檻）。
-- `counts.critical_7d` 與今日頁的 Critical 清單只算發布 7 天內的。
+- 今日頁的 KPI、分頁徽章與三個清單由前端依 `meta.timezone` 換算的今天計算，跨過午夜後不必等網站重新產生。Critical 清單只算發布 7 天內的。
+- 分頁開著超過 10 分鐘後，換頁時重新讀取資料，停更判定才不會用到舊的 `meta.json`。
 - `*_tr` 只在設定了翻譯且有譯文時輸出。
 - `cve/<CVE>.json` 為 `cves.json` 與 `kev.json` 的每一筆產生。KEV 項目沒有完整紀錄時，描述、廠商、產品、CWE 取自 KEV，參考連結取 `notes` 裡的網址。
 - `epss/` 只保存已在關注清單或 KEV 的 CVE。時間軸的「第一次有 EPSS」只在 CVE 因 Critical 或 KEV 開始保存的日子不早於保存的第一天、且早於走勢第一天時列出；因 EPSS 跨過才加入的 CVE 不知道更早的分數，不列出。

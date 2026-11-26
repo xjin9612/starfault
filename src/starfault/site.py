@@ -28,7 +28,6 @@ CHART_DAYS = 30
 CALIBRATION_DAYS = 7
 # 門檻校準表列出的 CVSS 門檻；設定的門檻不在其中時另外加入。
 CVSS_LEVELS = (9.0, 9.5, 10.0)
-RECENT_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -246,12 +245,10 @@ def _meta(
     view: SiteView,
     today: date,
     now: datetime,
-    daily: list[dict[str, Any]],
 ) -> dict[str, Any]:
     sources = state.load_sources()
     kev_state = view.kev_state
     epss_meta = state.load_epss_meta()
-    since = today - timedelta(days=RECENT_DAYS - 1)
     th = cfg.thresholds
     return {
         "generated_at": iso_now(now),
@@ -274,16 +271,6 @@ def _meta(
                 "count": len(kev_state.entries) if kev_state else 0,
             },
             "epss": sources["epss"] | {"date": epss_meta.date.isoformat() if epss_meta else None},
-        },
-        "counts": {
-            "new_today": next((d["total"] for d in daily if d["date"] == today.isoformat()), 0),
-            "kev_7d": sum(1 for e in view.kev if e.kev and e.kev.added >= since),
-            "epss_7d": sum(1 for e in view.cves if e.epss_cross and e.epss_cross >= since),
-            "critical_7d": sum(
-                1
-                for e in view.cves
-                if "critical" in e.reasons(cfg) and e.published and e.published >= since
-            ),
         },
     }
 
@@ -312,7 +299,7 @@ def build_site(
     tx = _Text(cfg, translations)
     view = build_view(state, cfg, today)
     daily = _daily(state, today)
-    write_compact(data / "meta.json", _meta(state, cfg, view, today, now, daily))
+    write_compact(data / "meta.json", _meta(state, cfg, view, today, now))
     write_compact(data / "cves.json", {"items": [_cve_item(e, cfg, tx) for e in view.cves]})
     write_compact(data / "kev.json", {"items": [_kev_item(e, tx) for e in view.kev]})
     write_compact(data / "daily.json", {"days": daily})

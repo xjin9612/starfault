@@ -31,7 +31,10 @@ function applyStaticText() {
  * ===================================================================== */
 class NotFound extends Error {}
 const cache = new Map();
+const DATA_TTL = 10 * 60000;  // 分頁開著超過這個毫秒數，換頁時重新讀取資料
+let cacheTime = 0;
 function getData(path) {
+  if (Date.now() - cacheTime > DATA_TTL) { cache.clear(); cacheTime = Date.now(); }
   if (cache.has(path)) return cache.get(path);
   const url = DATA_BASE + path.split('/').map(encodeURIComponent).join('/') + '.json';
   const p = fetch(url, { cache: 'no-cache' }).then(r => {
@@ -98,7 +101,7 @@ function sevHtml(cvss, withScore = true) {
 function epssHtml(e) {
   if (!e) return `<span class="epss none">${t('epss.none')}</span>`;
   const w = Math.max(2, Math.round(e.s * 100));
-  return `<span class="epss" title="${esc(t('epss.title', { p: pctile(e.p), date: e.date }))}"><span aria-hidden="true">EPSS</span><span class="meter" aria-hidden="true"><i style="width:${w}%"></i></span><b aria-hidden="true">${pctText(e.s)}</b><span class="sr">${esc(t('epss.sr', { s: pctText(e.s), p: pctile(e.p) }))}</span></span>`;
+  return `<span class="epss" title="${esc(t('epss.title', { p: pctile(e.p), date: e.date }))}"><span aria-hidden="true">EPSS</span><span class="meter" aria-hidden="true"><i style="width:${w}%"></i></span><b aria-hidden="true">${esc(pctText(e.s))}</b><span class="sr">${esc(t('epss.sr', { s: pctText(e.s), p: pctile(e.p) }))}</span></span>`;
 }
 function flagsHtml(r) {
   const k = r.kev;
@@ -171,7 +174,7 @@ let lastScrollY = 0, currentRoute = null, prevEntryId = null;
 
 // 每個列表的篩選：第一個值是預設值，預設值不寫進網址
 const FILTERS = {
-  cves: { reason: ['all', 'kev', 'epss', 'critical'], sev: ['all', ...SEVS], sort: ['new', 'epss', 'cvss'] },
+  cves: { reason: ['all', 'kev', 'epss', 'critical'], range: ['90', '7'], sev: ['all', ...SEVS], sort: ['new', 'epss', 'cvss'] },
   kev: { range: ['30', '7', '90', 'all'], flag: ['all', 'ransomware', 'triage'], sort: ['added', 'due'] }
 };
 function parseRoute(hash = location.hash) {
@@ -217,13 +220,13 @@ function renderHeader(meta) {
 }
 function renderTabs(route, meta) {
   const cur = route.name === 'cve' ? null : route.name;
-  const badge = { cves: meta ? META_COUNTS.cves : 0, kev: meta?.counts.kev_7d || 0 };
+  const badge = { cves: meta ? META_COUNTS.cves : 0, kev: meta ? META_COUNTS.kev : 0 };
   $('#tabs').innerHTML = ['today', 'cves', 'kev', 'rules'].map(k => {
     const b = badge[k] ? `<span class="badge" aria-hidden="true">${fmt(badge[k])}</span><span class="sr">${esc(t('tab.badge.' + k, { n: badge[k] }))}</span>` : '';
     return `<a class="tab" href="${k === 'today' ? '#/' : '#/' + k}"${k === cur ? ' aria-current="page"' : ''}>${t('route.' + k)}${b}</a>`;
   }).join('');
 }
-const META_COUNTS = { cves: 0 };
+const META_COUNTS = { cves: 0, kev: 0 };
 
 // 資料來源是否停更：回傳停更的來源清單
 function staleSources(meta) {
@@ -246,8 +249,17 @@ function staleHtml(meta) {
 /* =====================================================================
  * 頁面：今日
  * ===================================================================== */
-function kpisHtml(meta) {
-  const c = meta.counts;
+// 依瀏覽器換算的 TODAY 計算，跨過午夜後不必等網站重新產生
+function countsFor(cves, kev, daily) {
+  const since = addDays(TODAY, -(RECENT_DAYS - 1));
+  return {
+    kev_7d: kev.filter(k => k.added >= since).length,
+    epss_7d: cves.filter(r => r.epss_cross && r.epss_cross >= since).length,
+    critical_7d: cves.filter(r => r.reasons.includes('critical') && r.published >= since).length,
+    new_today: daily ? daily.days.find(d => d.date === TODAY)?.total ?? 0 : 0
+  };
+}
+function kpisHtml(meta, c) {
   return `<dl class="kpis" aria-label="${t('kpis.label')}">
     <div class="kpi"><dt>${t('kpi.kev')}</dt><dd class="${c.kev_7d ? 'warn' : ''}">${fmt(c.kev_7d)}</dd></div>
     <div class="kpi"><dt>${esc(t('kpi.epss', { th: pctText(meta.thresholds.epss) }))}</dt><dd class="${c.epss_7d ? 'acc' : ''}">${fmt(c.epss_7d)}</dd></div>
@@ -264,18 +276,19 @@ function sectionHtml(key, items, more, focus) {
   return `<section class="sec" aria-labelledby="sec-${key}"><div class="sec-head"><h3 id="sec-${key}">${esc(t(`sec.${key}`, th))}</h3>${link}</div>
     <p>${esc(t(`sec.${key}.desc`, th))}</p>${list}</section>`;
 }
-async function viewToday(route, meta, cves) {
+async function viewToday(route, meta, cves, kevAll) {
   const since = addDays(TODAY, -(RECENT_DAYS - 1));
   const kev = cves.filter(r => r.kev && r.kev.added >= since).sort((a, b) => b.kev.added.localeCompare(a.kev.added) || a.id.localeCompare(b.id));
-  const epss = cves.filter(r => r.epss_cross && r.epss_cross >= since).sort((a, b) => b.epss_cross.localeCompare(a.epss_cross) || b.epss.s - a.epss.s);
+  const epss = cves.filter(r => r.epss_cross && r.epss_cross >= since).sort((a, b) => b.epss_cross.localeCompare(a.epss_cross) || (b.epss?.s ?? -1) - (a.epss?.s ?? -1));
   const crit = cves.filter(r => r.reasons.includes('critical') && r.published >= since).sort((a, b) => b.published.localeCompare(a.published) || b.cvss.score - a.cvss.score);
   const daily = await getData('daily');
+  const kpis = kpisHtml(meta, countsFor(cves, kevAll, daily));
   const head = `<div class="view-head"><h2 tabindex="-1">${t('today.title')}</h2><p>${esc(t('today.desc', { date: TODAY }))}</p></div>`;
-  if (!cves.length && !daily.days.length) return staleHtml(meta) + kpisHtml(meta) + head + emptyHtml('quiet', t('empty.zero'), t('empty.zeroText'));
-  return staleHtml(meta) + kpisHtml(meta) + head + `<div class="sections">
+  if (!cves.length && !daily.days.length) return staleHtml(meta) + kpis + head + emptyHtml('quiet', t('empty.zero'), t('empty.zeroText'));
+  return staleHtml(meta) + kpis + head + `<div class="sections">
       ${sectionHtml('kev', kev, '#/kev?range=7', 'kev')}
-      ${sectionHtml('epss', epss, '#/cves?reason=epss', 'all')}
-      ${sectionHtml('critical', crit, '#/cves?reason=critical', 'all')}
+      ${sectionHtml('epss', epss, '#/cves?reason=epss&range=7', 'all')}
+      ${sectionHtml('critical', crit, '#/cves?reason=critical&range=7', 'all')}
     </div>${chartPanelHtml(daily.days)}`;
 }
 
@@ -307,7 +320,7 @@ function drawChart() {
   const padL = 36, padB = 22, padT = 6;
   const max = Math.max(...days.map(d => d.total));
   const step = max > 300 ? 100 : 50;
-  const top = Math.ceil(max / step) * step;
+  const top = Math.max(step, Math.ceil(max / step) * step);
   const cw = (W - padL) / days.length;
   const bw = Math.max(3, Math.min(22, cw - 3));
   const y = v => padT + (H - padT - padB) * (1 - v / top);
@@ -321,7 +334,7 @@ function drawChart() {
       const v = d.sev[k];
       if (!v) return;
       const y0 = y(acc), y1 = y(acc + v);
-      // 最上面一段做 2px 圓角的效果：用 rx，再用下面一段蓋住下緣
+      // 只有最上面一段加 2px 圓角
       segs += `<rect class="c-${k}" x="${x}" y="${y1}" width="${bw}" height="${Math.max(0, y0 - y1)}"${si === STACK.length - 1 || STACK.slice(si + 1).every(n => !d.sev[n]) ? ' rx="2"' : ''}/>`;
       acc += v;
     });
@@ -385,17 +398,20 @@ function summaryHtml(route, n) {
 async function viewCves(route, meta, cves) {
   const head = `<div class="view-head"><h2 tabindex="-1">${t('cves.title')}</h2><p>${esc(t('cves.desc', { th: pctText(meta.thresholds.epss), cvss: meta.thresholds.cvss.toFixed(1) }))}</p></div>`;
   if (!cves.length) return head + emptyHtml('quiet', t('empty.zero'), t('empty.zeroText'));
-  let list = cves.filter(r => (route.reason === 'all' || r.reasons.includes(route.reason)) && (route.sev === 'all' || (r.cvss?.sev || 'none') === route.sev));
+  // 近 7 天依篩選的原因看對應的日期：今日頁的清單與這裡的筆數一致
+  const since = route.range === '7' ? addDays(TODAY, -(RECENT_DAYS - 1)) : '';
+  const when = r => ({ kev: r.kev?.added, epss: r.epss_cross, critical: r.published }[route.reason] ?? lastEvent(r)) || '';
+  let list = cves.filter(r => (route.reason === 'all' || r.reasons.includes(route.reason)) && (route.sev === 'all' || (r.cvss?.sev || 'none') === route.sev) && when(r) >= since);
   const byNew = (a, b) => lastEvent(b).localeCompare(lastEvent(a)) || a.id.localeCompare(b.id);
   if (route.sort === 'epss') list.sort((a, b) => (b.epss?.s ?? -1) - (a.epss?.s ?? -1) || byNew(a, b));
   else if (route.sort === 'cvss') list.sort((a, b) => (b.cvss?.score ?? -1) - (a.cvss?.score ?? -1) || byNew(a, b));
   else list.sort(byNew);
   const body = list.length ? `<ol class="rows" aria-label="${t('cves.label')}">${list.map(r => rowHtml(r)).join('')}</ol>`
     : emptyHtml('filter', t('empty.none'), t('empty.noneText'), `<button type="button" class="btn" data-clear>${t('filter.clear')}</button>`);
-  return head + filtersHtml(route, ['reason', 'sev']) + summaryHtml(route, list.length) + body;
+  return head + filtersHtml(route, ['reason', 'range', 'sev']) + summaryHtml(route, list.length) + body;
 }
 async function viewKev(route, meta, cves, kev) {
-  const head = `<div class="view-head"><h2 tabindex="-1">${t('kev.title')}</h2><p>${esc(t('kev.desc', { n: fmt(meta.sources.kev.count), v: meta.sources.kev.version }))}</p></div>`;
+  const head = `<div class="view-head"><h2 tabindex="-1">${t('kev.title')}</h2><p>${esc(t(meta.sources.kev.version ? 'kev.desc' : 'kev.descNoVersion', { n: fmt(meta.sources.kev.count), v: meta.sources.kev.version }))}</p></div>`;
   if (!kev.length) return head + emptyHtml('quiet', t('empty.zero'), t('empty.zeroText'));
   const since = route.range === 'all' ? '' : addDays(TODAY, -(+route.range - 1));
   let list = kev.filter(k => k.added >= since && (route.flag === 'all' || (route.flag === 'ransomware' ? k.ransomware : k.triage))).map(fromKev);
@@ -429,7 +445,7 @@ function sparkHtml(hist, th) {
   const pts = hist.map((h, i) => `${x(i).toFixed(1)},${y(h.s).toFixed(1)}`).join(' ');
   const last = hist[hist.length - 1];
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(t('detail.sparkAria', { from: hist[0].d, to: last.d, a: pctText(hist[0].s), b: pctText(last.s) }))}">
-    <line class="thr" x1="${pad}" x2="${W - pad}" y1="${y(th)}" y2="${y(th)}"/><text class="thr-label" x="${pad}" y="${y(th) - 3}">${pctText(th)}</text>
+    <line class="thr" x1="${pad}" x2="${W - pad}" y1="${y(th)}" y2="${y(th)}"/><text class="thr-label" x="${pad}" y="${y(th) - 3}">${esc(pctText(th))}</text>
     <polyline class="line" points="${pts}"/><circle class="end" cx="${x(hist.length - 1)}" cy="${y(last.s)}" r="3.5"/></svg>`;
 }
 async function viewCve(route, meta, cves, kev) {
@@ -460,7 +476,7 @@ async function viewCve(route, meta, cves, kev) {
     : `<p class="muted">${t('detail.noCvss')}</p>`}</section>`;
   const e = r.epss;
   const epssPanel = `<section class="panel" aria-labelledby="pEpss"><h3 id="pEpss">EPSS</h3>${e
-    ? `<div class="score-big"><span class="num">${pctText(e.s)}</span><span class="muted">${esc(t('detail.pct', { p: pctile(e.p) }))}</span></div>${sparkHtml(d.epss_hist, th)}<dl class="kv"><dt>${t('detail.epssDate')}</dt><dd>${esc(e.date)}</dd>${r.epss_cross ? `<dt>${esc(t('detail.crossed', { th: pctText(th) }))}</dt><dd>${esc(r.epss_cross)}</dd>` : ''}</dl>`
+    ? `<div class="score-big"><span class="num">${esc(pctText(e.s))}</span><span class="muted">${esc(t('detail.pct', { p: pctile(e.p) }))}</span></div>${sparkHtml(d.epss_hist, th)}<dl class="kv"><dt>${t('detail.epssDate')}</dt><dd>${esc(e.date)}</dd>${r.epss_cross ? `<dt>${esc(t('detail.crossed', { th: pctText(th) }))}</dt><dd>${esc(r.epss_cross)}</dd>` : ''}</dl>`
     : `<p class="muted">${t('detail.noEpss')}</p>`}</section>`;
   const links = `<nav class="panel" aria-labelledby="pLinks"><h3 id="pLinks">${t('detail.links')}</h3><ul class="links">
       <li>${ext(`https://www.cve.org/CVERecord?id=${encodeURIComponent(id)}`, 'CVE.org')}</li>
@@ -492,7 +508,7 @@ async function viewRules(route, meta) {
   const vars = { th: pctText(th.epss), cvss: th.cvss.toFixed(1), days: th.epss_window_days, stack: th.stack_cvss.toFixed(1) };
   const calibrating = TODAY <= th.calibrating_until;
   const rules = ['kev', 'epss', 'critical', 'stack'].map(k => `<li class="rule"><h4>${k === 'kev' ? ICON.bolt : ''}${esc(t(`rule.${k}`, vars))}</h4><p>${esc(t(`rule.${k}.text`, vars))}</p><p class="when">${esc(t(`rule.${k}.when`, vars))}</p></li>`).join('');
-  const epssRows = stats.epss.map(x => `<tr class="${x.t === th.epss ? 'cur' : ''}"><td>EPSS ≥ ${pctText(x.t)}${x.t === th.epss ? esc(t('cal.current')) : ''}</td><td>${x.per_day.toFixed(1)}</td></tr>`).join('');
+  const epssRows = stats.epss.map(x => `<tr class="${x.t === th.epss ? 'cur' : ''}"><td>EPSS ≥ ${esc(pctText(x.t))}${x.t === th.epss ? esc(t('cal.current')) : ''}</td><td>${x.per_day.toFixed(1)}</td></tr>`).join('');
   const cvssRows = stats.cvss.map(x => `<tr class="${x.t === th.cvss ? 'cur' : ''}"><td>CVSS ≥ ${x.t.toFixed(1)}${x.t === th.cvss ? esc(t('cal.current')) : ''}</td><td>${x.per_day.toFixed(1)}</td></tr>`).join('');
   const stale = new Set(staleSources(meta).map(s => s.key));
   const src = meta.sources;
@@ -536,6 +552,7 @@ async function render(mode = 'update') {
     META = meta;
     setToday(meta.timezone);
     META_COUNTS.cves = cves.items.length;
+    META_COUNTS.kev = countsFor([], kev.items, null).kev_7d;
     const fn = { today: viewToday, cves: viewCves, kev: viewKev, cve: viewCve, rules: viewRules }[route.name];
     const html = await fn(route, meta, cves.items, kev.items);
     if (token !== renderToken) return;
@@ -607,6 +624,8 @@ window.addEventListener('scroll', () => {
   lastScrollY = window.scrollY;
   if (!scrollTick) { scrollTick = true; requestAnimationFrame(() => { scrollTick = false; updateStuck(); }); }
 }, { passive: true });
+// 跳到主要內容：不改網址，否則 hash 路由會把 #main 當成今日頁
+document.querySelector('.skip').addEventListener('click', e => { e.preventDefault(); $('#main').focus(); });
 window.addEventListener('hashchange', e => {
   if (prevEntryId) (entryStore[prevEntryId] ||= {}).scrollY = lastScrollY;
   const prevRoute = parseRoute(new URL(e.oldURL).hash);

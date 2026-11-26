@@ -1,20 +1,19 @@
 """網站（web/）的瀏覽器測試。資料見 fixture_data.py。
 
-由原型的 133 項檢查改寫：每一項檢查對應一個 assert；英文介面的 6 個頁面，以及
-6 種寬度 × 2 種主題 × 5 個頁面，是參數化的檢查。
-原型用網址參數模擬的狀態（empty、loading、error、stale）改由攔截 data/*.json 呈現。
+資料以外的狀態（空資料、載入中、讀取失敗、停更、特殊內容）由攔截 data/*.json 呈現。
 """
 
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 from typing import Any
 
 import pytest
 from playwright.sync_api import Page, Route, expect
 
 from tests.e2e.conftest import OpenPage, PageErrors, patch_json
-from tests.e2e.fixture_data import FOCUS
+from tests.e2e.fixture_data import FOCUS, NOW
 
 pytestmark = pytest.mark.e2e
 
@@ -76,20 +75,48 @@ def test_i18n_keys_match(open_page: OpenPage, base_url: str) -> None:
 def test_today(open_page: OpenPage, base_url: str) -> None:
     pg = open_page()
     _go(pg, base_url)
-    kpi = pg.inner_text(".kpis")
-    assert "KEV 新增" in kpi and "4" in kpi and "61" in kpi, kpi
+    # KEV 近 7 天、EPSS 近 7 天、Critical、今天新增。
+    assert pg.locator(".kpi dd").all_inner_texts() == ["4", "5", "9", "61"]
     assert "2026-11-25 11:20" in pg.inner_text("#hdrInfo")
+    assert "2026-11-25" in pg.inner_text(".view-head")
     assert pg.locator(".sec").count() == 3
+    assert [pg.locator(f".sec:nth-child({i}) .rows > li").count() for i in (1, 2, 3)] == [4, 5, 5]
+    heads = [pg.inner_text(f".sec:nth-child({i}) .sec-head") for i in (1, 2, 3)]
     assert (
-        pg.locator("#sec-kev").count() == 1
-        and pg.locator(".sec:nth-child(1) .rows > li").count() == 4
+        "查看全部 4 筆" in heads[0] and "查看全部 5 筆" in heads[1] and "查看全部 9 筆" in heads[2]
     )
-    assert pg.locator(".sec:nth-child(3) .rows > li").count() == 5
-    assert "查看全部 9 筆" in pg.inner_text(".sec:nth-child(3) .sec-head")
-    # 原型的示意資料提示只在範例模式出現；正式網站沒有，來源正常時也沒有停更提醒。
-    assert pg.locator(".demo-note").count() == 0 and pg.locator(".notice").count() == 0
+    # 來源正常時沒有停更提醒。
+    assert pg.locator(".notice").count() == 0
     due = pg.inner_text(".sec:nth-child(1)")
     assert "剩 3 天" in due and "（今天）" in due
+
+
+@pytest.mark.parametrize(
+    ("section", "url", "rows"),
+    [
+        (1, "#/kev?range=7", 4),
+        (2, "#/cves?reason=epss&range=7", 5),
+        (3, "#/cves?reason=critical&range=7", 9),
+    ],
+)
+def test_today_links_match_the_lists(
+    open_page: OpenPage, base_url: str, section: int, url: str, rows: int
+) -> None:
+    pg = open_page()
+    _go(pg, base_url)
+    _click(pg, f".sec:nth-child({section}) .sec-head a", url)
+    assert _rows(pg) == rows
+
+
+def test_today_follows_the_site_timezone(open_page: OpenPage, base_url: str) -> None:
+    """UTC 還是 11-25、台灣已經是 11-26：今天與近 7 天依台灣日期，不等網站重新產生。"""
+    pg = open_page()
+    pg.clock.set_fixed_time(NOW.replace(hour=16, minute=30))
+    _go(pg, base_url)
+    assert "2026-11-26" in pg.inner_text(".view-head")
+    # Critical 少了 7 天前發布的那筆；今天還沒有每日紀錄。
+    assert pg.locator(".kpi dd").all_inner_texts() == ["4", "5", "8", "0"]
+    assert "期限已過" in pg.inner_text(".sec:nth-child(1)")
 
 
 def test_today_chart(open_page: OpenPage, base_url: str) -> None:
@@ -114,8 +141,14 @@ def test_today_chart(open_page: OpenPage, base_url: str) -> None:
         " return n.slice(0,5).reduce((a,b)=>a+b,0)===n[5]; })"
     )
     assert sums
-    _click(pg, ".sec:nth-child(3) .sec-head a", "#/cves?reason=critical")
-    assert _rows(pg) == 9
+
+
+def test_chart_with_no_new_cves(open_page: OpenPage, base_url: str) -> None:
+    pg = open_page()
+    zero = {k: 0 for k in ("critical", "high", "medium", "low", "none")}
+    patch_json(pg, "daily", lambda d: {"days": [x | {"total": 0, "sev": zero} for x in d["days"]]})
+    _go(pg, base_url)
+    assert pg.locator("#chart .grid-line").count() > 0
 
 
 # ===== 關注 CVE =====
@@ -163,6 +196,30 @@ def test_cves_sorting_and_empty(open_page: OpenPage, base_url: str) -> None:
     assert _rows(pg) == CVES
 
 
+def test_cves_range_uses_the_date_of_the_reason(open_page: OpenPage, base_url: str) -> None:
+    pg = open_page()
+    _go(pg, base_url + "#/cves?reason=epss")
+    assert _rows(pg) == 10
+    _click(pg, '[data-f="range"][data-v="7"]', "#/cves?reason=epss&range=7")
+    assert _rows(pg) == 5 and "近 7 天" in pg.inner_text(".summary-line")
+    _go(pg, base_url + "#/cves?reason=kev&range=7")
+    assert _rows(pg) == 4
+
+
+def test_epss_section_without_a_current_score(open_page: OpenPage, base_url: str) -> None:
+    """跨過門檻的 CVE 不在最新一天的 EPSS 檔時，epss 為 null。"""
+    pg = open_page()
+
+    def drop(d: dict[str, Any]) -> dict[str, Any]:
+        crossed = sorted((i for i in d["items"] if i["epss_cross"]), key=lambda i: i["epss_cross"])
+        crossed[-1]["epss"] = None
+        return d
+
+    patch_json(pg, "cves", drop)
+    _go(pg, base_url)
+    assert pg.locator(".sec:nth-child(2) .rows > li").count() == 5
+
+
 # ===== KEV =====
 
 
@@ -179,8 +236,25 @@ def test_kev(open_page: OpenPage, base_url: str) -> None:
     _click(pg, '[data-f="sort"][data-v="due"]', "#/kev?range=all&sort=due")
     meta = pg.evaluate("[...document.querySelectorAll('#view .r-meta')].map(m=>m.innerText)")
     first_past = next((i for i, m in enumerate(meta) if "期限已過" in m), len(meta))
-    assert all("期限已過" in m for m in meta[first_past:]) and first_past > 0
-    assert "剩 1 天" in meta[1] or "今天" in meta[0]
+    assert all("期限已過" in m for m in meta[first_past:]) and 0 < first_past < len(meta)
+    # 還沒到期的由近到遠，過期的由近到遠（日期由新到舊）。
+    due = [re.findall(r"\d{4}-\d{2}-\d{2}", m)[-1] for m in meta]
+    assert due[:first_past] == sorted(due[:first_past]) and "今天" in meta[0]
+    assert due[first_past:] == sorted(due[first_past:], reverse=True)
+
+
+def test_kev_before_the_first_read(open_page: OpenPage, base_url: str) -> None:
+    pg = open_page()
+
+    def unread(m: dict[str, Any]) -> dict[str, Any]:
+        m["sources"]["kev"] |= {"version": None, "count": 0, "at": None}
+        return m
+
+    patch_json(pg, "meta", unread)
+    patch_json(pg, "kev", lambda d: {"items": []})
+    _go(pg, base_url + "#/kev")
+    head = pg.inner_text(".view-head")
+    assert "還沒有讀取成功" in head and "版本" not in head
 
 
 # ===== 詳細頁與返回還原 =====
@@ -268,7 +342,6 @@ def test_search(open_page: OpenPage, base_url: str) -> None:
 
 
 def _empty(pg: Page) -> None:
-    patch_json(pg, "meta", lambda m: m | {"counts": dict.fromkeys(m["counts"], 0)})
     patch_json(pg, "cves", lambda d: {"items": []})
     patch_json(pg, "kev", lambda d: {"items": []})
     patch_json(pg, "daily", lambda d: {"days": []})
@@ -331,6 +404,96 @@ def test_stale_sources(open_page: OpenPage, base_url: str) -> None:
     assert pg.locator(".st-bad").count() == 2
 
 
+def _at(delta: timedelta) -> str:
+    return (NOW - delta).isoformat().replace("+00:00", "Z")
+
+
+@pytest.mark.parametrize(
+    ("change", "stale"),
+    [
+        ({"cve": {"at": _at(timedelta(hours=2, minutes=59)), "ok": True}}, None),
+        ({"cve": {"at": _at(timedelta(hours=3, minutes=1)), "ok": True}}, "CVE 清單在"),
+        ({"cve": {"at": None, "ok": True}}, "CVE 清單在 — 之後"),
+        ({"epss": {"date": "2026-11-23"}}, None),
+        ({"epss": {"date": "2026-11-22"}}, "EPSS 停在 2026-11-22"),
+    ],
+    ids=["cve-2h59m", "cve-3h01m", "cve-never", "epss-2-days", "epss-3-days"],
+)
+def test_stale_boundaries(
+    open_page: OpenPage, base_url: str, change: dict[str, dict[str, Any]], stale: str | None
+) -> None:
+    pg = open_page()
+
+    def patch(m: dict[str, Any]) -> dict[str, Any]:
+        for k, v in change.items():
+            m["sources"][k] |= v
+        return m
+
+    patch_json(pg, "meta", patch)
+    _go(pg, base_url)
+    if stale is None:
+        assert pg.locator(".notice").count() == 0
+    else:
+        assert stale in pg.inner_text(".notice")
+
+
+def test_long_open_tab_reloads_data(open_page: OpenPage, base_url: str) -> None:
+    """分頁開了幾個小時後換頁，用新的 meta.json 判定停更。"""
+    pg = open_page()
+    later = NOW + timedelta(hours=4)
+    fetched: list[str] = []
+
+    def refreshed(m: dict[str, Any]) -> dict[str, Any]:
+        fetched.append(m["generated_at"])
+        if len(fetched) > 1:
+            for k in ("cve", "kev"):
+                m["sources"][k]["at"] = (later - timedelta(minutes=30)).isoformat()
+        return m
+
+    patch_json(pg, "meta", refreshed)
+    _go(pg, base_url)
+    pg.clock.set_fixed_time(later)
+    _click(pg, '.tab[href="#/rules"]', "#/rules")
+    assert len(fetched) == 2 and pg.locator(".st-bad").count() == 0
+
+
+# ===== 特殊內容 =====
+
+
+XSS = '<img src=x onerror="window.pwned=1">'
+
+
+def test_cve_text_is_not_html(open_page: OpenPage, base_url: str) -> None:
+    pg = open_page()
+
+    def item(d: dict[str, Any]) -> dict[str, Any]:
+        for i in d["items"]:
+            if i["id"] == FOCUS:
+                i |= {"title": f"Flaw {XSS} & co", "vendor": XSS, "product": '"Q" & <b>'}
+                i.pop("title_tr", None)
+        return d
+
+    def detail(d: dict[str, Any]) -> dict[str, Any]:
+        d.pop("desc_tr", None)
+        d["desc"] = f"Desc {XSS}"
+        d["affected"][0] |= {"product": XSS, "versions": "< 2 & <3"}
+        d["references"][0]["url"] = 'https://example.com/a"onmouseover="window.pwned=1'
+        return d
+
+    patch_json(pg, "cves", item)
+    patch_json(pg, "kev", item)
+    patch_json(pg, f"cve/{FOCUS}", detail)
+    _go(pg, base_url + "#/cves")
+    assert f"Flaw {XSS} & co" in pg.inner_text("#view")
+    _go(pg, base_url + f"#/cve/{FOCUS}")
+    body = pg.inner_text("#view")
+    assert f"Desc {XSS}" in body and "< 2 & <3" in body
+    pg.fill("#q", "flaw <img")
+    expect(pg.locator("#qList .dd-item").first).to_be_visible()
+    assert pg.locator("#view img, #qList img, #view b:text('Q')").count() == 0
+    assert pg.evaluate("window.pwned") is None
+
+
 # ===== 規則 =====
 
 
@@ -340,6 +503,19 @@ def test_rules(open_page: OpenPage, base_url: str) -> None:
     assert pg.locator(".rule").count() == 4
     assert pg.locator(".tbl tr.cur").count() == 2
     assert "暫定值" in pg.inner_text("#calT + p")
+
+
+# ===== 無障礙 =====
+
+
+def test_skip_link_keeps_the_page(open_page: OpenPage, base_url: str) -> None:
+    pg = open_page()
+    _go(pg, base_url + "#/cves?reason=kev")
+    pg.focus(".skip")
+    pg.keyboard.press("Enter")
+    assert pg.url.endswith("#/cves?reason=kev")
+    assert pg.evaluate("document.activeElement.id") == "main"
+    assert _rows(pg) == KEV_CVES
 
 
 # ===== 主題 =====
