@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from starfault.gemini import MODEL_PATTERN
@@ -111,7 +112,11 @@ class _Section:
         value = self._get(key)
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise self.error(key, "必須是數字")
-        if not math.isfinite(value):
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:
+            finite = False
+        if not finite:
             raise self.error(key, "必須是有限的數字")
         if value < minimum or (maximum is not None and value > maximum):
             bound = f"{minimum} 以上" if maximum is None else f"{minimum} 到 {maximum}"
@@ -151,6 +156,9 @@ def _thresholds(root: dict[str, Any]) -> Thresholds:
     if s.has("calibrating_until"):
         raw = s.get_str("calibrating_until")
         try:
+            # fromisoformat 也接受 20261202 與 2026-W49-3，這裡只收 YYYY-MM-DD。
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+                raise ValueError(raw)
             until = date.fromisoformat(raw)
         except ValueError as e:
             raise s.error("calibrating_until", f"必須是 YYYY-MM-DD，目前是 {raw!r}") from e
@@ -216,8 +224,8 @@ def _site(root: dict[str, Any]) -> SiteConfig:
     except (ZoneInfoNotFoundError, ValueError) as e:
         raise s.error("timezone", f"無效的時區 {name!r}") from e
     url = s.get_optional_str("url")
-    if url and not url.startswith("https://"):
-        raise s.error("url", "必須是空字串或 https:// 開頭的網址")
+    if url and (not url.startswith("https://") or not urlsplit(url).hostname):
+        raise s.error("url", "必須是空字串或 https:// 開頭、含主機名稱的網址")
     if url and not url.endswith("/"):
         url += "/"
     s.finish()

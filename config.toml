@@ -1,11 +1,11 @@
 # starfault 設定。載入時會檢查型別與範圍；未知的鍵視為錯誤。
 
 [thresholds]
-# EPSS 首次跨過此值（0 到 1）時列入每日摘要。
+# EPSS 首次跨過此值時列入每日摘要。0.0001 到 1。
 epss = 0.10
-# CVSS ≥ 此值且還沒有 EPSS 時列入每日摘要。
+# CVSS ≥ 此值且還沒有 EPSS 時列入每日摘要。0.1 到 10。
 cvss = 9.0
-# EPSS 規則只看發布幾天內的 CVE。
+# EPSS 規則只看發布幾天內的 CVE。1 到 90。
 epss_window_days = 30
 # 這天之前，規則頁把門檻標示為暫定值。門檻定案後刪除這一行。
 calibrating_until = "2026-12-02"
@@ -24,11 +24,11 @@ fallback_models = ["gemini-3.5-flash"]
 batch_size = 1
 # 每次執行最多翻譯幾則文字，上限 5000；0 表示不翻譯。
 max_per_run = 60
-# 兩次請求之間等待的秒數，避免超過每分鐘的請求上限。
+# 兩次請求之間等待的秒數，避免超過每分鐘的請求上限。0 以上。
 request_interval_seconds = 4
 
 [watchlist]
-# 技術棧命中時，CVSS ≥ 此值或未評分就列入每日摘要的「你的技術棧」段落。
+# 技術棧命中時，CVSS ≥ 此值或未評分就列入每日摘要的「你的技術棧」段落。0 到 10。
 # 清單本身不寫在這裡：放在 secret STARFAULT_WATCHLIST，本機用 watchlist.toml（不進版控）。
 cvss = 7.0
 
