@@ -135,10 +135,10 @@ flowchart TD
 
 - CVSS 選用順序：CNA v4.0 > CNA v3.1 > CNA v3.0 > CISA ADP v3.1；記下 `version` 與 `source`（`vendor`／`cisa-adp`）。分數不在 0 到 10 之間時略過。
 - 嚴重度依分數判定，不用紀錄裡的 `baseSeverity`：≥ 9.0 Critical、≥ 7.0 High、≥ 4.0 Medium、> 0 Low，沒有分數為 `none`。
-- 標題：CNA 的 `title`；沒有時用 KEV 的 `vulnerabilityName`；再沒有時取描述第一句，最多 120 字。
-- 描述取 `lang` 為 `en` 開頭的第一筆。
+- 標題：CNA 的 `title`；沒有時用 KEV 的 `vulnerabilityName`；再沒有時取描述第一句，最多 120 字。句點後接空白，再接大寫字母、數字、引號或左括號才算句尾，`e.g.`、`Inc.` 等縮寫除外。
+- 描述取 `lang` 為 `en` 開頭的第一筆；沒有英文時取第一筆非空的描述。
 - CWE 取 CNA 的 `problemTypes`；沒有時用 CISA ADP 的。
-- 受影響產品：`vendor` 與 `product`，沒有 `product` 時用 `packageName`。版本摘要依 `versions[]` 組成：`lessThan` 寫成 `< X` 或 `V – < X`，`lessThanOrEqual` 寫成 `≤ X` 或 `V – X`，其他寫版本本身。`lessThan` 的值與 `unaffected` 的單一版本列為修補版本。`versionType` 為 `git` 的項目、超過 40 字元的版本字串都不列。最多列 4 個，其餘以 `…` 表示。
+- 受影響產品：`vendor` 與 `product`，沒有 `product` 時用 `packageName`。版本摘要依 `versions[]` 組成：`lessThan` 寫成 `< X` 或 `V – < X`，`lessThanOrEqual` 寫成 `≤ X` 或 `V – X`，上界是 `*` 時寫成 `≥ V`，其他寫版本本身。版本 `0` 表示從最早的版本起，不列出。`lessThan` 的值，以及 `unaffected` 的單一版本或 `V` 起不受影響（`lessThan: *`）的 `V`，列為修補版本；`changes[]` 不讀。`versionType` 為 `git` 的項目、超過 40 字元的版本字串都不列。最多列 4 個，其餘以 `…` 表示。
 - `cpes` 支援 CPE 2.3（`cpe:2.3:a:vendor:product:…`）與 2.2（`cpe:/a:vendor:product:…`），只用在技術棧比對。
 - REJECTED 的紀錄從每日紀錄與關注清單移除（KEV 項目保留）；格式錯誤的紀錄略過並計數，計數寫進 log。
 

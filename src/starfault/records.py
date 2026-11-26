@@ -19,7 +19,10 @@ VERSIONS_MAX = 4
 VERSION_MAX_LEN = 40
 REFERENCES_MAX = 30
 _NO_VALUE = frozenset({"", "n/a", "unknown", "-", "*"})
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s")
+# 句點後接空白，再接大寫字母、數字、引號或左括號，才算句尾。
+_SENTENCE_END = re.compile(r"[.!?](?=\s+[A-Z0-9\"'(\[])")
+# 後面的句點不算句尾的縮寫，寫成小寫、不含最後的句點。
+_ABBREVIATIONS = frozenset({"e.g", "i.e", "inc", "ltd", "corp", "co", "vs", "no"})
 
 
 class RecordError(ValueError):
@@ -119,7 +122,12 @@ class CveRecord:
 
 def first_sentence(text: str) -> str:
     text = " ".join(text.split())
-    sentence = _SENTENCE_END.split(text, maxsplit=1)[0]
+    sentence = text
+    for m in _SENTENCE_END.finditer(text):
+        word = text[: m.start()].rsplit(" ", 1)[-1].lstrip("([\"'").lower()
+        if word not in _ABBREVIATIONS:
+            sentence = text[: m.end()]
+            break
     if len(sentence) <= TITLE_MAX:
         return sentence
     return sentence[: TITLE_MAX - 1].rstrip() + "…"
@@ -226,6 +234,7 @@ def _split_cpe23(value: str) -> list[str]:
 
 def _usable_version(version: dict[str, Any], key: str) -> str | None:
     value = _str(version.get(key))
+    # 版本 "0" 是「從最早的版本起」的慣用寫法，不是實際版本。
     if (
         value.lower() in _NO_VALUE
         or value == "0"
@@ -265,6 +274,8 @@ def _affected(entry: dict[str, Any]) -> Affected:
             fixed.append(less)
         elif less_eq:
             ranges.append(f"{start} – {less_eq}" if start else f"≤ {less_eq}")
+        elif start and "*" in (v.get("lessThan"), v.get("lessThanOrEqual")):
+            ranges.append(f"≥ {start}")
         elif start:
             ranges.append(start)
     cpes = tuple(
@@ -292,7 +303,10 @@ def _references(
 
 
 def parse_record(data: object) -> CveRecord:
-    """解析一筆 CVE JSON 5 紀錄。缺少 cveId 或 state 時丟出 RecordError。"""
+    """解析一筆 CVE JSON 5 紀錄。
+
+    cveId 或 state 不合法，或 PUBLISHED 紀錄缺少 containers.cna、datePublished 時丟出 RecordError。
+    """
     root = _dict(data)
     meta = _dict(root.get("cveMetadata"))
     cve_id = _str(meta.get("cveId")).upper()

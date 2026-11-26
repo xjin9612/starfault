@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
 from starfault.records import (
+    REFERENCES_MAX,
     TITLE_MAX,
     RecordError,
     first_sentence,
@@ -99,6 +102,46 @@ def test_cpe_escapes_are_decoded() -> None:
 def test_less_than_or_equal_ranges() -> None:
     r = parse_record(fixture_record("CVE-2024-11079"))
     assert r.affected[0].versions == "≤ 2.18.0"
+    r = parse_record(fixture_record("CVE-2026-131914"))
+    assert r.affected[0].versions == "≤ 0.9.1.0, ≤ 0.9.1 Beta"
+
+
+def test_real_version_ranges_and_fixed_versions() -> None:
+    juniper = parse_record(fixture_record("CVE-2026-103406")).affected[0]
+    assert juniper.versions == "< 7.0.5, 7.1.0 – < 7.1.7, 7.2.0 – < 7.2.3"
+    assert juniper.fixed == "7.0.5, 7.1.7, 7.2.3"
+    # 從某版起不受影響（lessThan "*"）與單一的不受影響版本，都列為修補版本。
+    red_hat = parse_record(fixture_record("CVE-2023-5380")).affected[0]
+    assert (red_hat.versions, red_hat.fixed) == ("", "0:1.8.0-26.el7_9")
+    amd = parse_record(fixture_record("CVE-2025-61963")).affected[0]
+    assert (amd.versions, amd.fixed) == ("", "GenoaPI 1.0.0.G")
+
+
+def _versions(*versions: dict[str, Any]) -> tuple[str, str | None]:
+    a = parse_record(cve("CVE-2026-90001", versions=versions)).affected[0]
+    return a.versions, a.fixed
+
+
+def test_open_ended_affected_range() -> None:
+    assert _versions({"version": "2.0", "lessThan": "*", "status": "affected"}) == ("≥ 2.0", None)
+    assert _versions({"version": "2.0", "lessThanOrEqual": "*", "status": "affected"}) == (
+        "≥ 2.0",
+        None,
+    )
+
+
+def test_unaffected_range_is_not_a_fixed_version() -> None:
+    assert _versions(
+        {"version": "3.0", "status": "affected"},
+        {"version": "1.0", "lessThan": "2.0", "status": "unaffected"},
+    ) == ("3.0", None)
+
+
+def test_version_list_limits() -> None:
+    many = [{"version": f"1.{i}", "status": "affected"} for i in range(6)]
+    assert _versions(*many)[0] == "1.0, 1.1, 1.2, 1.3…"
+    long = "pkg:generic/example@" + "1" * 30
+    assert _versions({"version": long, "status": "affected"})[0] == ""
 
 
 @pytest.mark.parametrize(
@@ -165,5 +208,81 @@ def test_severity_boundaries(score: float | None, sev: str) -> None:
 
 def test_first_sentence() -> None:
     assert first_sentence("One thing.  Two things.") == "One thing."
+    assert first_sentence("Fixed in 1.2. A flaw (CVE-2026-1) exists.") == "Fixed in 1.2."
+    assert (
+        first_sentence("A flaw in Foo Inc. Widget (e.g. The admin panel) allows RCE. More.")
+        == "A flaw in Foo Inc. Widget (e.g. The admin panel) allows RCE."
+    )
+    assert first_sentence("Upgrade to v2.1.3 or later. See notes.") == "Upgrade to v2.1.3 or later."
+    assert first_sentence("Path traversal. sentence-case follows.") == (
+        "Path traversal. sentence-case follows."
+    )
     long = "x" * 200
     assert len(first_sentence(long)) == TITLE_MAX and first_sentence(long).endswith("…")
+
+
+def _metrics(*items: tuple[str, float]) -> list[dict[str, object]]:
+    return [{key: {"baseScore": score, "vectorString": "CVSS:x/AV:N"}} for key, score in items]
+
+
+def test_cna_version_order_does_not_depend_on_list_order() -> None:
+    data = cve("CVE-2026-90001", score=None)
+    data["containers"]["cna"]["metrics"] = _metrics(("cvssV3_1", 7.5), ("cvssV4_0", 8.7))
+    r = parse_record(data)
+    assert r.cvss is not None and (r.cvss.version, r.cvss.score) == ("4.0", 8.7)
+
+
+def test_cna_score_wins_over_cisa_adp() -> None:
+    r = parse_record(cve("CVE-2026-90001", score=7.5, adp_score=9.9))
+    assert r.cvss is not None and (r.cvss.score, r.cvss.source) == (7.5, "vendor")
+
+
+def test_scores_from_other_adps_are_ignored() -> None:
+    data = cve("CVE-2026-90001", score=None)
+    data["containers"]["adp"] = [
+        {"providerMetadata": {"shortName": "Other-ADP"}, "metrics": _metrics(("cvssV3_1", 9.1))}
+    ]
+    assert parse_record(data).cvss is None
+
+
+def test_english_description_is_preferred() -> None:
+    data = cve("CVE-2026-90001")
+    data["containers"]["cna"]["descriptions"] = [
+        {"lang": "es", "value": "Una falla."},
+        {"lang": "en-US", "value": "A flaw."},
+    ]
+    assert parse_record(data).desc == "A flaw."
+    data["containers"]["cna"]["descriptions"] = [{"lang": "es", "value": "Una falla."}]
+    assert parse_record(data).desc == "Una falla."
+
+
+def test_cna_title_wins_over_kev_name() -> None:
+    r = parse_record(cve("CVE-2026-90001", title="CNA title"))
+    assert r.display_title("KEV name") == "CNA title"
+
+
+def test_references_keep_http_urls_only_and_are_capped() -> None:
+    data = cve("CVE-2026-90001")
+    refs = [{"url": "ftp://example.test/a"}, {"url": "javascript:alert(1)"}]
+    refs += [{"url": f"https://example.test/{i}"} for i in range(REFERENCES_MAX + 5)]
+    data["containers"]["cna"]["references"] = refs
+    urls = [url for url, _ in parse_record(data).references]
+    assert len(urls) == REFERENCES_MAX and all(u.startswith("https://") for u in urls)
+
+
+def test_wildcard_cpe_product_is_dropped() -> None:
+    r = parse_record(cve("CVE-2026-90001", cpes=["cpe:2.3:a:acme:*:*:*:*:*:*:*:*:*"]))
+    assert r.affected[0].cpes == ()
+
+
+def test_cwe_name_prefix_is_removed() -> None:
+    data = cve("CVE-2026-90001")
+    data["containers"]["cna"]["problemTypes"] = [
+        {"descriptions": [{"cweId": "CWE-79", "description": "CWE-79: Cross-site Scripting"}]}
+    ]
+    assert parse_record(data).cwe == (("CWE-79", "Cross-site Scripting"),)
+
+
+def test_time_without_zone_is_utc() -> None:
+    r = parse_record(cve("CVE-2026-90001", published="2026-11-24T03:00:00"))
+    assert r.published == datetime(2026, 11, 24, 3, tzinfo=UTC)
