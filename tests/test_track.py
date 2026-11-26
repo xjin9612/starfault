@@ -58,6 +58,60 @@ def test_rejected_record_is_removed(tmp_path: Path) -> None:
     assert state.load_daily(date(2026, 11, 25)).new == {}
 
 
+def test_rejected_record_is_removed_from_rescored(tmp_path: Path) -> None:
+    state = State(tmp_path)
+    pub = "2026-11-24T00:00:00Z"
+    for score in (None, 9.8):
+        record = parse_record(cve("CVE-2026-94001", published=pub, updated=pub, score=score))
+        apply_records(state, [record], CFG, TODAY, set(), SINCE)
+    assert state.load_daily(date(2026, 11, 24)).rescored
+    apply_records(
+        state, [parse_record(cve("CVE-2026-94001", state="REJECTED"))], CFG, TODAY, set(), SINCE
+    )
+    assert state.load_daily(date(2026, 11, 24)).to_json()["rescored"] == []
+
+
+def test_changed_publish_date_moves_the_row(tmp_path: Path) -> None:
+    state = State(tmp_path)
+    first = parse_record(cve("CVE-2026-94001", published="2026-11-23T00:00:00Z"))
+    apply_records(state, [first], CFG, TODAY, set(), SINCE)
+    moved = parse_record(cve("CVE-2026-94001", published="2026-11-25T00:00:00Z", score=8.0))
+    result = apply_records(state, [moved], CFG, TODAY, set(), SINCE)
+    assert result.new == 0
+    assert state.load_daily(date(2026, 11, 23)).new == {}
+    assert state.load_daily(date(2026, 11, 25)).new == {"CVE-2026-94001": Row(8.0, "high")}
+    # 搬到 since 之前的日子時只移除。
+    early = parse_record(cve("CVE-2026-94001", published="2026-10-01T00:00:00Z"))
+    apply_records(state, [early], CFG, TODAY, set(), SINCE)
+    assert state.load_daily(date(2026, 11, 25)).new == {}
+
+
+def test_late_rows_are_an_epss_baseline(tmp_path: Path) -> None:
+    """晚於隔天才寫入的列，第一次 EPSS 只記錄，不算首次跨過。"""
+    state = State(tmp_path)
+    late = cve("CVE-2026-94001", published="2026-11-20T00:00:00Z", score=5.0)
+    fresh = cve("CVE-2026-94002", published="2026-11-25T00:00:00Z", score=5.0)
+    apply_records(state, [parse_record(late), parse_record(fresh)], CFG, TODAY, set(), SINCE)
+    assert state.load_daily(date(2026, 11, 20)).baseline == {"CVE-2026-94001"}
+    assert state.load_daily(date(2026, 11, 25)).baseline == set()
+    data = EpssData(
+        "v1", "2026-11-25T12:00:00Z", {"CVE-2026-94001": (0.3, 0.9), "CVE-2026-94002": (0.3, 0.9)}
+    )
+    fake = FakeSources(records={"CVE-2026-94001": late, "CVE-2026-94002": fresh})
+    with Http(transport=fake.transport()) as http:
+        apply_epss(state, http, data, CFG, TODAY, set())
+    # 兩筆都進關注清單；舊的那筆記為已通知，不進每日摘要，也不算進門檻校準。
+    watch = state.load_watch()
+    assert watch["CVE-2026-94001"].epss_cross == watch["CVE-2026-94002"].epss_cross
+    assert set(state.load_notified()) == {"CVE-2026-94001"}
+    old_row = state.load_daily(date(2026, 11, 20)).new["CVE-2026-94001"]
+    assert set(old_row.cross.values()) == {""}
+    assert state.load_daily(date(2026, 11, 20)).baseline == set()
+    assert set(state.load_daily(date(2026, 11, 25)).new["CVE-2026-94002"].cross.values()) == {
+        "2026-11-25"
+    }
+
+
 def test_days_before_since_are_not_recorded(tmp_path: Path) -> None:
     state = State(tmp_path)
     old = parse_record(cve("CVE-2026-94001", published="2026-10-20T00:00:00Z"))
@@ -105,12 +159,23 @@ def test_prune_keeps_kev_and_recent_events(tmp_path: Path) -> None:
     w = state.load_watch()["CVE-2026-94003"]
     w.epss_cross = TODAY - timedelta(days=90)
     state.save_watch(w)
+    w = Watch(parse_record(cve("CVE-2026-94004", published="2026-07-01T00:00:00Z")))
+    w.epss_cross = TODAY - timedelta(days=91)
+    state.save_watch(w)
     state.save_daily(state.load_daily(TODAY - timedelta(days=90)))
     state.save_daily(state.load_daily(TODAY - timedelta(days=89)))
     removed = prune(state, CFG, TODAY, {"CVE-2026-94002"})
-    assert removed == 1
+    assert removed == 2
     assert set(state.load_watch()) == {"CVE-2026-94002", "CVE-2026-94003"}
     assert state.daily_days() == [TODAY - timedelta(days=89)]
+
+
+def test_prune_epss_keeps_thirty_days(tmp_path: Path) -> None:
+    state = State(tmp_path)
+    for age in (29, 30):
+        state.save_epss_day(TODAY - timedelta(days=age), {"CVE-2026-94001": (0.1, 0.5)})
+    state.prune_epss(TODAY)
+    assert state.epss_days() == [TODAY - timedelta(days=29)]
 
 
 def test_kev_update_detects_new_and_removed(tmp_path: Path) -> None:
@@ -141,6 +206,24 @@ def test_fill_records_respects_budget_and_stops_on_failures(tmp_path: Path) -> N
         assert fill_records(state, http, ids, CFG, TODAY, 10) == (0, 3)
 
 
+def test_fill_records_counts_missing_records_and_skips_bad_ones(tmp_path: Path) -> None:
+    state = State(tmp_path)
+    fake = FakeSources()
+    with Http(transport=fake.transport()) as http:
+        assert fill_records(
+            state, http, [f"CVE-2026-9410{i}" for i in range(5)], CFG, TODAY, 2
+        ) == (
+            0,
+            0,
+        )
+    assert len(fake.requested) == 2
+    # 格式錯誤的紀錄是個別問題，不會讓後面的紀錄停止抓取。
+    bad = {f"CVE-2026-9420{i}": cve(f"CVE-2026-9420{i}", state="RESERVED") for i in range(4)}
+    fake = FakeSources(records=bad | {"CVE-2026-94210": cve("CVE-2026-94210")})
+    with Http(transport=fake.transport()) as http:
+        assert fill_records(state, http, [*bad, "CVE-2026-94210"], CFG, TODAY, 10) == (1, 4)
+
+
 def test_epss_cross_is_deferred_when_record_is_missing(tmp_path: Path) -> None:
     state = State(tmp_path)
     apply_records(
@@ -166,9 +249,10 @@ def test_epss_cross_is_deferred_when_record_is_missing(tmp_path: Path) -> None:
 
 def test_epss_window_boundary(tmp_path: Path) -> None:
     state = State(tmp_path)
+    # EPSS 日期 11-25，30 天內是台灣 10-27 到 11-25。
     for cve_id, pub in [
-        ("CVE-2026-94001", "2026-10-26T00:00:00Z"),
-        ("CVE-2026-94002", "2026-10-24T00:00:00Z"),
+        ("CVE-2026-94001", "2026-10-26T16:00:00Z"),
+        ("CVE-2026-94002", "2026-10-26T15:59:00Z"),
     ]:
         record = parse_record(cve(cve_id, published=pub, score=5.0))
         apply_records(state, [record], CFG, date(2026, 10, 27), set(), date(2026, 10, 1))
@@ -177,7 +261,8 @@ def test_epss_window_boundary(tmp_path: Path) -> None:
     )
     fake = FakeSources(
         records={
-            "CVE-2026-94001": cve("CVE-2026-94001", published="2026-10-26T00:00:00Z", score=5.0)
+            "CVE-2026-94001": cve("CVE-2026-94001", published="2026-10-26T16:00:00Z", score=5.0),
+            "CVE-2026-94002": cve("CVE-2026-94002", published="2026-10-26T15:59:00Z", score=5.0),
         }
     )
     with Http(transport=fake.transport()) as http:

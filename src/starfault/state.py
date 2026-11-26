@@ -41,12 +41,15 @@ class Daily:
     new: dict[str, Row] = field(default_factory=dict)
     # CVE → (分數, 嚴重度)
     rescored: dict[str, tuple[float, str]] = field(default_factory=dict)
+    # 還沒和 EPSS 比對過、不知道何時跨過門檻的列：下一次 EPSS 只記錄，不算首次跨過。
+    baseline: set[str] = field(default_factory=set)
 
     def to_json(self) -> dict[str, Any]:
         return {
             "date": self.day.isoformat(),
             "new": [[i, r.score, r.sev, r.cross or None] for i, r in sorted(self.new.items())],
             "rescored": [[i, s, sev] for i, (s, sev) in sorted(self.rescored.items())],
+            "baseline": sorted(self.baseline),
         }
 
     @classmethod
@@ -55,6 +58,7 @@ class Daily:
             day=date.fromisoformat(d["date"]),
             new={i: Row(s, sev, dict(x or {})) for i, s, sev, x in d["new"]},
             rescored={i: (s, sev) for i, s, sev in d["rescored"]},
+            baseline=set(d["baseline"]),
         )
 
 

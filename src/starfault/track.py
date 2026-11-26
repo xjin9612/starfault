@@ -80,6 +80,33 @@ class _Dailies:
             self.days[day] = Daily(day)
         return self.days[day]
 
+    def remove(self, cve_id: str) -> None:
+        """從 new 與 rescored 移除。"""
+        day = self.where.pop(cve_id, None)
+        if day is not None:
+            self.days[day].new.pop(cve_id, None)
+            self.days[day].baseline.discard(cve_id)
+            self.changed.add(day)
+        for d, daily in self.days.items():
+            if daily.rescored.pop(cve_id, None) is not None:
+                self.changed.add(d)
+        self.rescored.discard(cve_id)
+
+    def move(self, cve_id: str, old: date, new: date | None) -> None:
+        """datePublished 改變時把列搬到新的日子；new 為 None 時只移除。"""
+        row = self.days[old].new.pop(cve_id)
+        base = cve_id in self.days[old].baseline
+        self.days[old].baseline.discard(cve_id)
+        self.changed.add(old)
+        del self.where[cve_id]
+        if new is None:
+            return
+        self.get(new).new[cve_id] = row
+        if base:
+            self.days[new].baseline.add(cve_id)
+        self.where[cve_id] = new
+        self.changed.add(new)
+
     def save(self) -> None:
         for day in sorted(self.changed):
             self.state.save_daily(self.days[day])
@@ -93,14 +120,10 @@ def apply_records(
     kev_ids: set[str],
     since: date,
 ) -> CveResult:
-    """更新每日新 CVE 紀錄與關注清單。
+    """更新每日新 CVE 紀錄與關注清單。規則見 docs/DEVELOPMENT.md「狀態檔」。
 
-    - 發布日在保留期間內、且不早於 since 的 CVE 寫入當天的 new。since 是開始讀 delta 後
-      第一個完整的日子；更早的日子只讀得到後來有更新的 CVE，數字不完整。
-    - 已有紀錄、原本沒有 CVSS、現在有的，寫入 dateUpdated 那天的 rescored，每個 CVE 只記一次。
-      同一次讀到的多個版本只看最後一個，所以只有前一次執行記下的未評分紀錄才會成為 rescored。
-    - 已在關注清單的 CVE 更新紀錄；符合 Critical 規則或列在 KEV 的 CVE 加入關注清單。
-    - REJECTED 的 CVE 從每日紀錄移除，不在 KEV 的也從關注清單移除。
+    since 是開始讀 delta 後第一個完整的日子，更早的日子不寫入 new。同一次讀到的多個版本
+    只看最後一個，所以只有前一次執行記下的未評分紀錄才會成為 rescored。
     """
     tz = cfg.site.timezone
     dailies = _Dailies(state, today)
@@ -110,10 +133,7 @@ def apply_records(
         result.records += 1
         if r.rejected:
             result.rejected += 1
-            day = dailies.where.pop(r.id, None)
-            if day is not None:
-                dailies.days[day].new.pop(r.id, None)
-                dailies.changed.add(day)
+            dailies.remove(r.id)
             if r.id in watch and r.id not in kev_ids:
                 del watch[r.id]
                 state.delete_watch(r.id)
@@ -122,10 +142,17 @@ def apply_records(
         pub = local_date(r.published, tz)
         score = r.cvss.score if r.cvss else None
         sev = severity(score)
-        if max(dailies.first, since) <= pub <= today:
+        in_range = max(dailies.first, since) <= pub <= today
+        old = dailies.where.get(r.id)
+        if old is not None and old != pub:
+            dailies.move(r.id, old, pub if in_range else None)
+        if in_range:
             row = dailies.get(pub).new.get(r.id)
             if row is None:
                 dailies.days[pub].new[r.id] = Row(score, sev)
+                # 晚於隔天才寫入的列（backfill 或停跑後補讀）沒有之前的 EPSS 可比。
+                if pub < today - timedelta(days=1):
+                    dailies.days[pub].baseline.add(r.id)
                 dailies.where[r.id] = pub
                 result.new += 1
                 dailies.changed.add(pub)
@@ -213,23 +240,29 @@ def update_kev(state: State, catalog: Catalog, today: date) -> KevUpdate:
 def fill_records(
     state: State, http: Http, ids: Iterable[str], cfg: Config, today: date, budget: int
 ) -> tuple[int, int]:
-    """為還沒有完整紀錄的 KEV 或關注 CVE 抓取單筆紀錄，最多 budget 筆。
+    """為還沒有完整紀錄的 KEV 或關注 CVE 抓取單筆紀錄，最多請求 budget 筆。
 
-    回傳 (取得筆數, 失敗筆數)。cvelistV5 沒有的 CVE 不算失敗。
+    回傳 (取得筆數, 失敗筆數)。cvelistV5 沒有或 REJECTED 的 CVE 不算失敗，但計入 budget。
     """
     watch = state.load_watch()
-    fetched = failed = consecutive = 0
+    requested = fetched = failed = consecutive = 0
     for cve_id in ids:
-        if fetched + failed >= budget or consecutive >= MAX_CONSECUTIVE_FAILURES:
+        if requested >= budget or consecutive >= MAX_CONSECUTIVE_FAILURES:
             break
         if cve_id in watch:
             continue
+        requested += 1
         try:
             record = cvelist.fetch_record(http, cve_id)
-        except (FetchError, RecordError) as e:
+        except FetchError as e:
             failed += 1
             consecutive += 1
             log.warning("無法取得 %s：%s", cve_id, e)
+            continue
+        except RecordError as e:
+            failed += 1
+            consecutive = 0
+            log.warning("無法解析 %s：%s", cve_id, e)
             continue
         consecutive = 0
         if record is None or record.rejected:
@@ -253,8 +286,8 @@ class EpssResult:
 def epss_candidates(
     state: State, cfg: Config, epss_date: date, *, extra_days: int = 0
 ) -> dict[str, date]:
-    """EPSS 規則要看的 CVE（發布 epss_window_days 天內）→ 發布日。"""
-    first = epss_date - timedelta(days=cfg.thresholds.epss_window_days + extra_days)
+    """EPSS 規則要看的 CVE（以 EPSS 資料日期為準，發布 epss_window_days 天內，含當天）→ 發布日。"""
+    first = epss_date - timedelta(days=cfg.thresholds.epss_window_days - 1 + extra_days)
     out: dict[str, date] = {}
     for day in state.daily_days():
         if first <= day <= epss_date:
@@ -271,16 +304,22 @@ def apply_epss(
     levels = epss_levels(cfg)
     candidates = epss_candidates(state, cfg, epss_date)
     changed: dict[date, Daily] = {}
+    baseline: set[str] = set()
     for cve_id, pub in candidates.items():
+        daily = changed.get(pub) or state.load_daily(pub)
+        if cve_id in daily.baseline:
+            daily.baseline.discard(cve_id)
+            baseline.add(cve_id)
+            changed[pub] = daily
         score = data.scores.get(cve_id)
         if score is None:
             continue
-        daily = changed.get(pub) or state.load_daily(pub)
         row = daily.new[cve_id]
         for t in levels:
             key = level_key(t)
             if score[0] >= t and key not in row.cross:
-                row.cross[key] = day_key
+                # 第一次比對的列不知道何時跨過，日期留空，不算進門檻校準。
+                row.cross[key] = "" if cve_id in baseline else day_key
                 changed[pub] = daily
     for daily in changed.values():
         state.save_daily(daily)
@@ -297,6 +336,7 @@ def apply_epss(
     fill_records(state, http, missing, cfg, today, budget=len(missing))
     watch = state.load_watch()
     crossed: list[str] = []
+    notified = state.load_notified()
     for cve_id in crossing:
         w = watch.get(cve_id)
         if w is None:
@@ -304,6 +344,10 @@ def apply_epss(
         w.epss_cross = epss_date
         state.save_watch(w)
         crossed.append(cve_id)
+        if cve_id in baseline:
+            notified.setdefault(cve_id, {})["epss"] = f"{day_key}T00:00:00Z"
+    if baseline & set(crossed):
+        state.save_notified(notified)
     keep = set(watch) | kev_ids
     state.save_epss_day(epss_date, {i: v for i, v in data.scores.items() if i in keep})
     state.prune_epss(epss_date)

@@ -173,23 +173,27 @@ flowchart TD
 | `cvelist.json` | `eod_through`：讀過 end_of_day delta 的最後一個 UTC 日；`since`：每日紀錄完整的第一天 |
 | `sources.json` | 各來源最後一次成功的時間 `at` 與這次是否成功 `ok` |
 | `watch/<CVE>.json` | 關注清單每筆 CVE 的解析後紀錄，加上 `epss_cross`（首次跨過門檻的 EPSS 日期）與 `critical`（符合 Critical 規則的日期） |
-| `daily/<YYYY-MM-DD>.json` | 當天（`site.timezone`）發布的全部新 CVE：`new` 每列 `[id, cvss, sev, cross]`；當天第一次有 CVSS 的 `rescored` 每列 `[id, cvss, sev]`。保留 90 天 |
+| `daily/<YYYY-MM-DD>.json` | 當天（`site.timezone`）發布的全部新 CVE：`new` 每列 `[id, cvss, sev, cross]`；當天第一次有 CVSS 的 `rescored` 每列 `[id, cvss, sev]`；`baseline` 是還沒和 EPSS 比對過的晚到 CVE。保留 90 天 |
 | `epss.json` | 最新 EPSS 檔的 `date`、`model`、`score_date` |
 | `epss/<YYYY-MM-DD>.json` | 當天關注清單與 KEV 的 EPSS 分數 `{ CVE: [epss, percentile] }`，詳細頁的走勢圖用。保留 30 天 |
 | `translations.jsonl` | 譯文，格式與 starstrata 相同：每行 `key`、`lang`、`text`；`key` 是原文正規化空白後 SHA-256 的前 16 個十六進位字元 |
 | `translation_failures.json` | 各 `key` 翻譯失敗的累計次數；沒有失敗紀錄時刪除 |
 
 - 檔案格式固定：鍵依字母排序；前兩層每個項目一行，更深的層級寫成一行。內容不變時檔案不變。
-- `daily/` 的 `cross` 是各校準門檻（見「門檻校準」）首次達到的 EPSS 日期，例如 `{"0.1": "2026-11-25"}`；都沒達到時為 `null`。
-- 開始讀 delta 之前發布的 CVE 不寫進 `daily/`：那些日子只讀得到後來有更新的 CVE，數字不完整。`since` 記錄第一個完整的日子。
+- `daily/` 的 `cross` 是各校準門檻（見「門檻校準」）首次達到的 EPSS 日期，例如 `{"0.1": "2026-11-25"}`；都沒達到時為 `null`。日期是空字串表示第一次比對時已經達到，不知道何時跨過。
+- 開始讀 delta 之前發布的 CVE 不寫進 `daily/`：那些日子只讀得到後來有更新的 CVE，數字不完整。`since` 記錄第一個完整的日子。從 UTC 日 D 的 0 時起連續讀取時，任何時區的 D+1 日都完整，所以 `since` 是第一個讀取的 UTC 日加一天。
+- `--backfill-days` 讀到第一天的 end_of_day 時，`since` 往前移到那天加一天，不會往後移；讀不到時 `since` 不變並記警告。
+- end_of_day 一次最多補讀 7 天。停跑超過 7 天時，中間的日子不完整，要用 `--backfill-days` 補讀。
 - `rescored`：前一次執行記下的未評分 CVE，之後的紀錄有了 CVSS，就寫進 `dateUpdated` 那天的 `rescored`。同一個 CVE 只記一次。
+- REJECTED 的 CVE 從 `new` 與 `rescored` 移除。`datePublished` 改到另一天時，列搬到新的日子。
+- 發布日早於昨天才寫入的列（backfill 或停跑後補讀）列入 `baseline`。下一次 EPSS 只記錄這些列已達到的門檻，日期留空：不算首次跨過，不進每日摘要，也不算進門檻校準。跨過 `thresholds.epss` 的照樣加入關注清單，`epss_cross` 是那次的 EPSS 日期。
 
 ### 關注清單
 
 - 加入條件：列入 KEV、EPSS 首次跨過 `thresholds.epss`（發布 `epss_window_days` 天內）、CVSS ≥ `thresholds.cvss` 且發布 7 天內。
 - 保留到最後一個事件（發布、跨過門檻、符合 Critical）後 90 天；KEV 項目永遠保留。
 - 每次讀到 delta 時更新已在清單裡的紀錄。
-- KEV 項目沒有完整紀錄時，`kev` 每次最多抓 100 筆單筆紀錄，待推播的優先，再依列入日期由新到舊。第一次執行約需 18 次 hourly 才能補齊。補齊前，詳細頁改用 KEV 目錄的描述、廠商、產品與 CWE。
+- KEV 項目沒有完整紀錄時，`kev` 每次最多請求 100 筆單筆紀錄，待推播的優先，再依列入日期由新到舊。cvelistV5 沒有或 REJECTED 的也計入 100 筆。連續 3 筆連線或伺服器錯誤時停止；格式錯誤的紀錄只略過該筆。第一次執行約需 18 次 hourly 才能補齊。補齊前，詳細頁改用 KEV 目錄的描述、廠商、產品與 CWE。
 - EPSS 跨過門檻、但 cvelistV5 取不到紀錄的 CVE 這次不加入，下次再試。
 
 ## 規則
@@ -202,7 +206,7 @@ flowchart TD
 | 技術棧 | 命中技術棧清單，CVSS ≥ `watchlist.cvss` 或未評分 | 每日摘要最上面的段落 |
 
 - 門檻比較都含等號。
-- 「發布幾天內」依 `site.timezone` 的日期計算，含當天：7 天內是今天往前 6 天到今天。
+- 「發布幾天內」依 `site.timezone` 的日期計算，含當天：7 天內是今天往前 6 天到今天。EPSS 規則以 EPSS 資料日期代替今天。
 - EPSS 跨過後又跌回、再跨過，不算新的跨過。
 - Critical 規則在有 EPSS 分數後不再觸發。
 - KEV 第一次執行只建立快照，不推播。
@@ -311,7 +315,7 @@ note = "前端代理"                  # 選填：顯示在推播
 | 結束碼 | 意義 |
 |---|---|
 | `0` | 成功 |
-| `1` | 資料來源讀取失敗或 Telegram 發送失敗；已取得的資料照常寫入 |
+| `1` | 資料來源讀取失敗或 Telegram 發送失敗；已取得的資料照常寫入。`cve` 套用已讀到的 delta，`eod_through` 只推進到讀成功的日子 |
 | `2` | 設定錯誤、技術棧清單格式錯誤或 `TELEGRAM_THREAD_ID` 不合法，沒有執行任何工作 |
 
 `translate` 除了設定錯誤以外一律回傳 `0`，翻譯失敗只記警告。翻譯的流程、提示詞的防護與失敗處理與 starstrata 相同，模型設定在 `[translation]`。

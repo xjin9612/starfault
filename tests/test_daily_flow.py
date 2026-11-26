@@ -365,3 +365,81 @@ def test_backfill_reads_past_days(run: Run, fake: FakeSources, workdir: Path) ->
     # 第一個讀取的 UTC 日之後才是完整的日子；台灣 11-23 04:00 屬於 11-23。
     assert state.load_cvelist() == (date(2026, 11, 24), date(2026, 11, 23))
     assert "CVE-2026-91100" in state.load_daily(date(2026, 11, 23)).new
+
+
+def test_backfill_never_moves_since_later(run: Run, fake: FakeSources, workdir: Path) -> None:
+    for d in range(18, 25):
+        fake.eod[date(2026, 11, d)] = []
+    state = State(workdir / "state")
+    assert run("cve", "--backfill-days", "7", now=NOW) == 0
+    assert state.load_cvelist() == (date(2026, 11, 24), date(2026, 11, 19))
+    assert run("cve", "--backfill-days", "1", now=NOW) == 0
+    assert state.load_cvelist() == (date(2026, 11, 24), date(2026, 11, 19))
+
+
+def test_backfill_without_the_first_day_keeps_since(
+    run: Run, fake: FakeSources, workdir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake.eod[date(2026, 11, 24)] = []
+    state = State(workdir / "state")
+    assert run("cve", now=NOW) == 0
+    assert state.load_cvelist() == (date(2026, 11, 24), date(2026, 11, 25))
+    assert run("cve", "--backfill-days", "3", now=NOW) == 0
+    assert state.load_cvelist() == (date(2026, 11, 24), date(2026, 11, 25))
+    assert "backfill 沒有讀到 2026-11-22 的 end_of_day" in caplog.text
+
+
+def test_unpublished_end_of_day_is_read_next_time(
+    run: Run, fake: FakeSources, workdir: Path
+) -> None:
+    state = State(workdir / "state")
+    assert run("cve", now=EARLY) == 0
+    assert state.load_cvelist() == (date(2026, 11, 23), date(2026, 11, 25))
+    fake.eod[date(2026, 11, 24)] = [cve("CVE-2026-91100", published="2026-11-24T20:00:00Z")]
+    assert run("cve", now=NOW) == 0
+    assert state.load_cvelist() == (date(2026, 11, 24), date(2026, 11, 25))
+    assert "CVE-2026-91100" in state.load_daily(date(2026, 11, 25)).new
+
+
+def test_end_of_day_catch_up_is_capped(run: Run, fake: FakeSources, workdir: Path) -> None:
+    from starfault import cvelist
+
+    state = State(workdir / "state")
+    state.save_cvelist(date(2026, 11, 1), date(2026, 11, 2))
+    run("cve", now=NOW)
+    eod = [u for u in fake.requested if "end_of_day" in u]
+    assert eod[0] == cvelist.eod_url(date(2026, 11, 18))
+
+
+def test_cve_failure_keeps_what_was_read(run: Run, fake: FakeSources, workdir: Path) -> None:
+    from starfault import cvelist
+
+    fake.eod[date(2026, 11, 24)] = [cve("CVE-2026-91100", published="2026-11-24T20:00:00Z")]
+    fake.status[cvelist.hourly_url(date(2026, 11, 25), 22)] = 500
+    assert run("cve", now=NOW) == 1
+    state = State(workdir / "state")
+    assert "CVE-2026-91100" in state.load_daily(date(2026, 11, 25)).new
+    assert state.load_cvelist()[0] == date(2026, 11, 24)
+    assert state.load_sources()["cve"]["ok"] is False
+
+
+def test_backfilled_epss_crossings_are_not_in_the_digest(
+    run: Run, fake: FakeSources, workdir: Path, telegram: None
+) -> None:
+    old = cve("CVE-2026-91100", published="2026-11-22T20:00:00Z", score=5.0)
+    fresh = cve("CVE-2026-91101", published="2026-11-25T03:00:00Z", score=5.0)
+    fake.eod[date(2026, 11, 22)] = [old]
+    fake.eod[date(2026, 11, 23)] = []
+    fake.eod[date(2026, 11, 24)] = []
+    fake.hourly[(date(2026, 11, 25), 22)] = [fresh]
+    fake.records |= {"CVE-2026-91100": old, "CVE-2026-91101": fresh}
+    fake.epss = epss_csv(
+        {"CVE-2026-91100": (0.5, 0.99), "CVE-2026-91101": (0.3, 0.98)}, "2026-11-25"
+    )
+    assert run("cve", "--backfill-days", "3", now=NOW) == 0
+    assert run("epss", now=NOW) == 0
+    assert run("digest", now=NOW) == 0
+    text = fake.sent[0].text
+    assert "<b>EPSS 跨過 10%（1）</b>" in text
+    assert "CVE-2026-91101" in text and "CVE-2026-91100" not in text
+    assert set(State(workdir / "state").load_watch()) >= {"CVE-2026-91100", "CVE-2026-91101"}

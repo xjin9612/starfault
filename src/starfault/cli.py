@@ -196,6 +196,7 @@ def cmd_cve(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
     days = _eod_days(state, utc_now.date(), args.backfill_days)
     batch = cvelist.Batch()
     processed: date | None = None
+    error: Exception | None = None
     with env.http() as http:
         try:
             for day in days:
@@ -209,19 +210,24 @@ def cmd_cve(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
             if hourly is not None:
                 batch.add(hourly)
         except (FetchError, ValueError) as e:
-            log.error("CVE delta 讀取失敗：%s", e)
-            state.mark_source("cve", False, now)
-            return EXIT_FAILED
+            error = e
     kev_ids = _kev_ids(state)
     through, since = state.load_cvelist()
-    if since is None or args.backfill_days:
-        # 第一個讀取的 UTC 日在任何時區都涵蓋下一個日子的全部。
+    # 從 UTC 日 D 的 0 時起連續讀取時，任何時區的 D+1 日都完整。第一次執行時 days[0] 這次
+    # 沒讀到也會由 eod_through 在下次補讀；backfill 只在讀到 days[0] 時把 since 往前移。
+    if since is None:
         since = (days[0] if days else utc_now.date()) + timedelta(days=1)
+    elif args.backfill_days:
+        if processed is None:
+            log.warning("CVE：backfill 沒有讀到 %s 的 end_of_day，since 不變", days[0])
+        else:
+            since = min(since, days[0] + timedelta(days=1))
     result = track.apply_records(state, batch.records.values(), cfg, today, kev_ids, since)
     removed = track.prune(state, cfg, today, kev_ids)
+    read_through = max((d for d in (processed, through) if d), default=None)
     first_day = days[0] if days else utc_now.date()
-    state.save_cvelist(processed or through or first_day - timedelta(days=1), since)
-    state.mark_source("cve", True, now)
+    state.save_cvelist(read_through or first_day - timedelta(days=1), since)
+    state.mark_source("cve", error is None, now)
     log.info(
         "CVE：%d 筆紀錄（略過格式錯誤 %d、REJECTED %d），新 CVE %d、補上分數 %d、"
         "關注清單新增 %d、更新 %d、移除 %d",
@@ -234,6 +240,9 @@ def cmd_cve(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
         result.watch_updated,
         removed,
     )
+    if error is not None:
+        log.error("CVE delta 讀取失敗：%s", error)
+        return EXIT_FAILED
     return 0
 
 
