@@ -16,11 +16,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # uv 的 checksum 內建在固定 SHA 的 setup-uv 裡，require-checksums 讓不在內建清單的版本直接失敗。
+      # Dependabot 不會更新 version。
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          version: "0.13.10"
+          version: "0.13.9"
           python-version: "3.14"
-      - name: 安裝相依套件（依 uv.lock）
+          require-checksums: true
+      # 建置 starfault 本身用的 setuptools 由 uv 另外下載，不在 uv.lock 的 hash 驗證範圍內。
+      - name: 安裝相依套件（依 uv.lock 驗證 hash）
         run: uv sync --locked
       - name: ruff
         run: |
@@ -38,11 +42,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # uv 的 checksum 內建在固定 SHA 的 setup-uv 裡，require-checksums 讓不在內建清單的版本直接失敗。
+      # Dependabot 不會更新 version。
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          version: "0.13.10"
+          version: "0.13.9"
           python-version: "3.14"
-      - name: 安裝相依套件（依 uv.lock）
+          require-checksums: true
+      # 建置 starfault 本身用的 setuptools 由 uv 另外下載，不在 uv.lock 的 hash 驗證範圍內。
+      - name: 安裝相依套件（依 uv.lock 驗證 hash）
         run: uv sync --locked
       # 瀏覽器由 Playwright 自己下載，不在 uv.lock 的雜湊驗證範圍內。
       - name: 安裝 Chromium

@@ -42,7 +42,7 @@ python3 -m http.server -d _site 8000
 
 - 直接相依寫在 `pyproject.toml`，開發用的工具在 `[dependency-groups] dev`。
 - `uv.lock` 由 `uv lock` 產生，不手動編輯。改了 `pyproject.toml` 後執行 `uv lock`，兩個檔案一起 commit。
-- CI 與 workflow 都用 `uv sync --locked`：`uv.lock` 與 `pyproject.toml` 不一致時直接失敗。
+- CI 與 workflow 都用 `uv sync --locked`：`uv.lock` 與 `pyproject.toml` 不一致時直接失敗，安裝時依 `uv.lock` 驗證 hash。建置 starfault 本身用的 setuptools 由 uv 另外下載，不在驗證範圍內。
 - Dependabot 每週檢查 uv 套件與 GitHub Actions 的更新（`.github/dependabot.yml`）。
 
 ## repo 結構
@@ -333,7 +333,12 @@ log 會出現在公開 repo 的 Actions 頁面：不印技術棧名稱、命中�
 
 - 只在 `main` 執行；從其他分支手動執行時整個 job 略過。
 - checkout 取分支最新的 commit，重跑或排隊的執行也看得到先前已 push 的狀態。
-- 相依套件用 `uv sync --locked --no-dev` 安裝，直接執行 `.venv/bin/starfault`。
+- 相依套件用 `uv sync --locked --no-dev --no-install-project` 安裝，不建置 starfault 本身；以 `PYTHONPATH=src` 執行 `uv run --no-sync python -m starfault`。
+- uv 版本固定在 workflow 的 `version`（四處）。setup-uv 用自己內建的 checksum 驗證下載的 uv，並設 `require-checksums: true`：版本不在固定 SHA 的 setup-uv 內建清單時，步驟直接失敗。Dependabot 只更新 `uses:`，不會更新 `version`，升級 uv 時手動修改。
+- hourly 與 daily 關閉 setup-uv 的快取：快取的 key 與 CI 相同，但不含 `dev` 群組。
+- hourly 與 daily 共用 concurrency group `state`，同時只有一個執行在改狀態檔。設 `queue: max`：預設只保留一個排隊中的執行，更晚的會取代它（[官方文件](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)）。
+- 各步驟的逾時加總不超過 job 的逾時：hourly 30 分對 40 分，daily 55 分對 65 分。
+- `backfill_days` 不是 `0` 時一律交給 `starfault cve --backfill-days` 檢查，不合法的值讓步驟失敗。
 - 資料來源或推播失敗時，後續步驟照常執行，job 最後標為失敗並發送 Telegram 失敗通知。通知依 `site.locale` 選用繁中或英文；讀不到設定時用繁中。失敗通知用與 `cli.thread_id` 相同的規則決定是否帶 `message_thread_id`，不合法的值照帶，由 Telegram 拒絕。
 - `deploy` job 在網站產生並上傳後執行；資料來源失敗時網站照常部署，停更提醒顯示在網站上。
 - GitHub Actions 的排程在負載高時會延後，KEV 推播可能晚幾十分鐘到數小時。需要更即時時，改用外部 cron 觸發 `workflow_dispatch`。

@@ -7,24 +7,31 @@ on:
   workflow_dispatch:
     inputs:
       backfill_days:
-        description: 重新讀取今天以前幾個 UTC 日的 CVE delta（0 表示照常）
+        description: 重新讀取今天以前幾個 UTC 日的 CVE delta（1 到 90；0 表示照常）
         type: number
         default: 0
 
 permissions:
   contents: read
 
-# 與 daily 共用：狀態檔同時只有一個執行在改，後到的排隊等待。
+env:
+  PYTHONPATH: src
+
+# 與 hourly 共用：狀態檔同時只有一個執行在改，後到的排隊等待。預設只保留一個排隊中的
+# 執行，更晚的會取代它；queue: max 讓排隊中的執行不被取代。
+# https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
 concurrency:
   group: state
   cancel-in-progress: false
+  queue: max
 
 jobs:
   daily:
     # 狀態檔只屬於 main，從其他分支手動執行時不做任何事。
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    # 各步驟的逾時加總（55 分）不超過 job 的逾時，最後的 commit 與失敗通知才有時間執行。
+    timeout-minutes: 65
     permissions:
       contents: write
     outputs:
@@ -35,47 +42,53 @@ jobs:
         with:
           # 取分支最新的 commit，重跑或排隊的執行才看得到先前已 push 的狀態。
           ref: ${{ github.ref_name }}
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # uv 的 checksum 內建在固定 SHA 的 setup-uv 裡，require-checksums 讓不在內建清單的版本直接失敗。
+      # Dependabot 不會更新 version。快取的 key 與 CI 相同但不含 dev 群組，所以關閉。
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          version: "0.13.10"
+          version: "0.13.9"
           python-version: "3.14"
+          require-checksums: true
+          enable-cache: false
       # 失敗通知依 site.locale 選用語言；讀不到時用繁中。
       - name: 讀取語言
         id: locale
         continue-on-error: true
         run: python3 -c 'import tomllib; print("locale=" + tomllib.load(open("config.toml", "rb"))["site"]["locale"])' >> "$GITHUB_OUTPUT"
-      - name: 安裝相依套件（依 uv.lock）
-        run: uv sync --locked --no-dev
+      # 只裝執行需要的相依套件，不建置 starfault 本身：建置用的 setuptools 不在 uv.lock 的 hash 驗證範圍內。
+      - name: 安裝相依套件（依 uv.lock 驗證 hash）
+        run: uv sync --locked --no-dev --no-install-project
 
       # 讀取還沒處理的 end_of_day delta，補上 hourly 漏抓的紀錄。
       - name: 讀取 CVE delta
         id: cve
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           BACKFILL_DAYS: ${{ inputs.backfill_days || 0 }}
+        # 0 以外的值一律交給 CLI 檢查，不合法時結束碼 2。
         run: |
-          if [ "$BACKFILL_DAYS" -gt 0 ]; then
-            .venv/bin/starfault cve --backfill-days "$BACKFILL_DAYS"
+          if [ "$BACKFILL_DAYS" != "0" ]; then
+            uv run --no-sync python -m starfault cve --backfill-days "$BACKFILL_DAYS"
           else
-            .venv/bin/starfault cve
+            uv run --no-sync python -m starfault cve
           fi
 
       - name: 讀取 EPSS
         id: epss
         continue-on-error: true
         timeout-minutes: 10
-        run: .venv/bin/starfault epss
+        run: uv run --no-sync python -m starfault epss
 
       # 翻譯失敗時各處顯示原文，下次執行再補，所以不列入下方的各步驟結果。
       - name: 翻譯
         id: translate
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 10
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: .venv/bin/starfault translate
+        run: uv run --no-sync python -m starfault translate
 
       - name: 每日摘要
         id: digest
@@ -87,7 +100,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID }}
           STARFAULT_WATCHLIST: ${{ secrets.STARFAULT_WATCHLIST }}
-        run: .venv/bin/starfault digest
+        run: uv run --no-sync python -m starfault digest
 
       # 前面任何步驟失敗、甚至 job 被取消，都要嘗試保住已發送的紀錄與當天的資料。
       - name: commit 並 push 狀態
@@ -115,7 +128,7 @@ jobs:
       - name: 產生網站
         id: build_site
         if: ${{ !cancelled() }}
-        run: .venv/bin/starfault site --out _site
+        run: uv run --no-sync python -m starfault site --out _site
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: ${{ !cancelled() && steps.build_site.outcome == 'success' }}
