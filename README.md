@@ -154,7 +154,7 @@ uv run starfault site                     # build the site into _site/
 - **CVE titles stay in English**: the Gemini free tier often answers `503` at peak times. Untranslated text is shown as is and retried every day, at most `translation.max_per_run` texts per run.
 - **A detail page says "not found"**: the site only lists CVEs that match an alert rule; watched CVEs are kept for 90 days after their last event.
 - **Missed stack matches**: a product written in a way your list does not cover is not matched. After going live, check the list against recent CVEs and add the missing spellings to `match`.
-- **Duplicate alerts**: if Telegram accepts a message but the response fails, the retry sends it again.
+- **Duplicate alerts**: alerts are recorded only after Telegram confirms them, so a failed or interrupted send is retried in full. If Telegram accepted the message but the response failed, or a long digest failed after its first part, the retry sends those parts again.
 
 ## Data licensing and credits
 

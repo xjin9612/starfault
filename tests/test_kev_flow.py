@@ -119,13 +119,16 @@ def test_without_telegram_alerts_are_kept_for_later(
     assert len(fake.sent) == 1
 
 
-def test_send_failure_rolls_back_and_retries(
+def test_send_failure_keeps_the_alert_pending(
     run: Run, fake: FakeSources, workdir: Path, telegram: None
 ) -> None:
     _setup(fake)
     run("kev", now=NOW)
     _add_c(fake)
     run("kev", now=NOW)
+    # 發送當下還沒有記為已通知：job 在發送途中被終止時，下次照樣重發。
+    at_send: list[object] = []
+    fake.on_telegram = lambda: at_send.append(_state(workdir).load_notified())
     fake.telegram_fail = True
     assert run("push", now=NOW) == 1
     assert _state(workdir).load_notified() == {}
@@ -134,6 +137,8 @@ def test_send_failure_rolls_back_and_retries(
     fake.telegram_fail = False
     assert run("push", now=NOW) == 0
     assert len(fake.sent) == 1
+    assert at_send and all(n == {} for n in at_send)
+    assert "kev" in _state(workdir).load_notified()["CVE-2026-90003"]
 
 
 def test_pending_alerts_expire_after_a_week(

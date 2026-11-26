@@ -134,7 +134,7 @@ def push_kev(
 ) -> KevPushResult:
     """推播待推播清單裡的 KEV 新增，一則一個 CVE。
 
-    發送前寫入 notified.json；發送失敗時回滾該筆並丟出 TelegramError，下次重試。
+    發送成功後才寫入 notified.json；發送失敗時丟出 TelegramError，該筆留在待推播清單。
     send 為 None（未設定 Telegram）時不發送，待推播清單保留。
     """
     today = local_date(now, cfg.site.timezone)
@@ -159,16 +159,9 @@ def push_kev(
         assert entry is not None
         pairs = kev_pairs(kev) + (record_pairs(entry.record) if entry.record else [])
         message = kev_message(ctx, entry, kev, watchlist.match_pairs(pairs))
+        send(message)
         notified.setdefault(cve_id, {})["kev"] = iso_now(now)
         state.save_notified(notified)
-        try:
-            send(message)
-        except Exception:
-            del notified[cve_id]["kev"]
-            if not notified[cve_id]:
-                del notified[cve_id]
-            state.save_notified(notified)
-            raise
         del kev_state.pending[cve_id]
         state.save_kev(kev_state)
         result.sent += 1
@@ -198,7 +191,7 @@ def utc_days(days: Sequence[date], cfg: Config) -> list[date]:
 @dataclass
 class Digest:
     message: Message | None
-    # (CVE, 原因)：發送前寫入 notified.json。
+    # (CVE, 原因)：發送成功後寫入 notified.json。
     marks: list[tuple[str, str]] = field(default_factory=list)
     # 技術棧段落處理到的日子；讀取 CVE 紀錄失敗時為 None，下次重新處理。
     last_day: date | None = None
@@ -372,29 +365,20 @@ def build_digest(
 
 
 def send_digest(state: State, digest: Digest, send: Send, *, now: datetime) -> None:
-    """寫入已通知與 last_day 後發送；發送失敗時回滾並丟出 TelegramError。
+    """發送成功後寫入已通知與 last_day；發送失敗時不寫入並丟出 TelegramError。
 
-    只有技術棧段落時，發送失敗不回滾也不丟出：回滾與失敗的結束碼會透露有命中。
+    只有技術棧段落時，發送失敗照樣寫入且不丟出：不寫入與失敗的結束碼會透露有命中。
     """
+    if digest.message is not None:
+        try:
+            send(digest.message)
+        except Exception:
+            if digest.marks:
+                raise
     notified = state.load_notified()
-    before = {k: dict(v) for k, v in notified.items()}
-    previous_day = state.load_digest_day()
     stamp = iso_now(now)
     for cve_id, reason in digest.marks:
         notified.setdefault(cve_id, {})[reason] = stamp
     state.save_notified(notified)
     if digest.last_day:
         state.save_digest_day(digest.last_day)
-    if digest.message is None:
-        return
-    try:
-        send(digest.message)
-    except Exception:
-        if not digest.marks:
-            return
-        state.save_notified(before)
-        if previous_day:
-            state.save_digest_day(previous_day)
-        else:
-            (state.root / "digest.json").unlink(missing_ok=True)
-        raise

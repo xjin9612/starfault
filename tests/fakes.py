@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -32,6 +33,8 @@ class FakeSources:
     records: dict[str, dict[str, Any]] = field(default_factory=dict)
     status: dict[str, int] = field(default_factory=dict)
     telegram_fail: bool = False
+    # 收到 Telegram 請求時呼叫，用來檢查發送當下的狀態檔。
+    on_telegram: Callable[[], None] | None = None
     sent: list[Sent] = field(default_factory=list)
     requested: list[str] = field(default_factory=list)
 
@@ -53,6 +56,8 @@ class FakeSources:
         url = str(request.url)
         self.requested.append(url)
         if request.url.host == "api.telegram.org":
+            if self.on_telegram:
+                self.on_telegram()
             if self.telegram_fail:
                 return httpx.Response(400, json={"ok": False, "description": "Bad Request"})
             body = json.loads(request.content)

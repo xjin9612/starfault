@@ -255,18 +255,25 @@ def test_critical_rule_stops_once_epss_exists(run: Run, fake: FakeSources, teleg
     assert "CVE-2026-91001" not in fake.sent[0].text
 
 
-def test_failed_send_rolls_back(run: Run, fake: FakeSources, workdir: Path, telegram: None) -> None:
+def test_failed_send_writes_nothing(
+    run: Run, fake: FakeSources, workdir: Path, telegram: None
+) -> None:
     _sources(fake)
     run("cve", now=EARLY)
     run("cve", now=NOW)
     run("epss", now=NOW)
+    state = State(workdir / "state")
+    # 發送當下還沒有寫入：job 在發送途中被終止時，下次整份重發。
+    at_send: list[object] = []
+    fake.on_telegram = lambda: at_send.append((state.load_notified(), state.load_digest_day()))
     fake.telegram_fail = True
     assert run("digest", now=NOW, watchlist=WATCHLIST) == 1
-    state = State(workdir / "state")
     assert state.load_notified() == {} and state.load_digest_day() is None
     fake.telegram_fail = False
     assert run("digest", now=NOW, watchlist=WATCHLIST) == 0
     assert "你的技術棧（3）" in fake.sent[0].text
+    assert at_send and all(a == ({}, None) for a in at_send)
+    assert state.load_digest_day() == date(2026, 11, 25)
 
 
 def test_stack_records_failure_still_sends_public_sections(
