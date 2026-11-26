@@ -69,7 +69,7 @@ class Watch:
     record: CveRecord
     # EPSS 首次跨過 thresholds.epss 的 EPSS 資料日期。
     epss_cross: date | None = None
-    # 第一次符合 Critical 規則（發布 7 天內且 CVSS ≥ thresholds.cvss）的日期。
+    # 第一次在發布 7 天內 CVSS ≥ thresholds.cvss 的日期；「還沒有 EPSS」由推播時判斷。
     critical: date | None = None
 
     @property
@@ -138,7 +138,6 @@ class State:
     def __init__(self, root: Path) -> None:
         self.root = root
 
-    # ---- KEV ----
     @property
     def _kev_path(self) -> Path:
         return self.root / "kev.json"
@@ -149,7 +148,6 @@ class State:
     def save_kev(self, kev: KevState) -> None:
         write_json(self._kev_path, kev.to_json())
 
-    # ---- 已通知 ----
     def load_notified(self) -> dict[str, dict[str, str]]:
         path = self.root / "notified.json"
         loaded: dict[str, dict[str, str]] = read_json(path) if path.is_file() else {}
@@ -158,7 +156,6 @@ class State:
     def save_notified(self, notified: dict[str, dict[str, str]]) -> None:
         write_json(self.root / "notified.json", notified)
 
-    # ---- 每日摘要進度 ----
     def load_digest_day(self) -> date | None:
         path = self.root / "digest.json"
         return date.fromisoformat(read_json(path)["last_day"]) if path.is_file() else None
@@ -166,7 +163,6 @@ class State:
     def save_digest_day(self, day: date) -> None:
         write_json(self.root / "digest.json", {"last_day": day.isoformat()})
 
-    # ---- 資料來源狀態 ----
     def load_sources(self) -> dict[str, dict[str, Any]]:
         path = self.root / "sources.json"
         loaded: dict[str, dict[str, Any]] = read_json(path) if path.is_file() else {}
@@ -179,7 +175,6 @@ class State:
         sources[name] = {"at": iso_now(now) if ok else previous["at"], "ok": ok}
         write_json(self.root / "sources.json", sources)
 
-    # ---- cvelist 進度 ----
     def load_cvelist(self) -> tuple[date | None, date | None]:
         """(已讀過 end_of_day delta 的最後一個 UTC 日, 每日紀錄完整的第一天)。"""
         path = self.root / "cvelist.json"
@@ -194,7 +189,6 @@ class State:
             {"eod_through": eod_through.isoformat(), "since": since.isoformat()},
         )
 
-    # ---- 關注清單 ----
     @property
     def _watch_dir(self) -> Path:
         return self.root / "watch"
@@ -214,7 +208,6 @@ class State:
     def delete_watch(self, cve_id: str) -> None:
         (self._watch_dir / f"{cve_id}.json").unlink(missing_ok=True)
 
-    # ---- 每日新 CVE ----
     @property
     def _daily_dir(self) -> Path:
         return self.root / "daily"
@@ -236,7 +229,6 @@ class State:
             if (today - day).days >= DAILY_KEEP_DAYS:
                 (self._daily_dir / f"{day.isoformat()}.json").unlink()
 
-    # ---- EPSS ----
     def load_epss_meta(self) -> EpssMeta | None:
         path = self.root / "epss.json"
         if not path.is_file():

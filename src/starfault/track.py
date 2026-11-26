@@ -358,6 +358,6 @@ def apply_epss(
 
 def wanted_for_epss(state: State, cfg: Config, today: date, kev_ids: set[str]) -> set[str]:
     """解析 EPSS CSV 時要保留的 CVE。EPSS 日期最晚是 today，用 today 估算候選範圍。"""
-    # EPSS 檔的日期可能比 today 早幾天，多保留幾天的候選。
+    # EPSS 停更時檔案日期比 today 早，多保留 7 天的候選。
     window = epss_candidates(state, cfg, today, extra_days=7)
     return set(window) | set(state.load_watch()) | kev_ids

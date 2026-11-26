@@ -22,7 +22,7 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
 
 - **費用**：公開 repo 使用 GitHub 提供的標準 runner 免費（[GitHub Actions 計費](https://docs.github.com/en/billing/concepts/product-billing/github-actions)）。hourly workflow 每天執行 24 次。
 - **收錄範圍**：網站只收錄符合推播規則的 CVE（KEV、EPSS 升溫、Critical）。其他 CVE 請到 [CVE.org](https://www.cve.org) 或 [NVD](https://nvd.nist.gov) 查詢。
-- **推播時間**：GitHub Actions 的排程在負載高時會延後，KEV 推播可能晚幾十分鐘到數小時。
+- **推播時間**：GitHub Actions 的排程在負載高時會延後，負載夠高時會丟棄部分執行（[GitHub 文件](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)）。KEV 推播會晚幾十分鐘到數小時。
 - **門檻是暫定值**：`thresholds` 的門檻要用上線後一週的實際資料校準，規則頁的「門檻校準」表列出各門檻每天會推播幾則。
 - **Telegram 群組必須是私人群組**：每日摘要的「你的技術棧」段落會透露你的技術棧。不要設公開帳號，邀請連結不要外流。
 - **Gemini 免費方案**：Google 會用免費服務收到的內容改進產品，也可能經人工審閱（[Gemini API 條款](https://aistudio.google.com/docs/terms)）。starfault 只送出網站收錄的公開 CVE 標題與描述，不送出技術棧清單。
@@ -34,7 +34,7 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
    - `site.url` 改成 `https://<你的帳號>.github.io/<repo>/`。設為 `""` 時，Telegram 不附網站按鈕，分享預覽標籤也不帶網址與圖片。
    - `site.locale` 設為 `zh-TW` 或 `en`，決定網站與 Telegram 訊息的語言。
    - `translation.target` 設成 CVE 標題與描述要翻成的語言（例如 `ja`）；設為 `""` 則不翻譯。
-3. 清空 `state/`：裡面是原作者的狀態。保留空目錄即可，第一次執行會重新建立。
+3. `state/` 底下有檔案時全部刪除：那是原作者的狀態。第一次執行會重新建立這個目錄。
 4. 在 Settings → Secrets and variables → Actions 建立 secrets：
 
    | 名稱 | 必要 | 用途 |
@@ -45,7 +45,7 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
    | `GEMINI_API_KEY` | 否 | 翻譯（預設供應商），在 [Google AI Studio](https://aistudio.google.com) 免費建立。未設定時顯示原文 |
    | `ANTHROPIC_API_KEY` | 否 | `translation.provider` 設為 `anthropic` 時改用 Claude |
 
-   要發到群組的某個主題時，另外在同一頁的 Variables 分頁建立 repository variable `TELEGRAM_THREAD_ID`。它是 variable 而不是 secret：GitHub 會把 secret 的值從 log 遮掉，`7` 這種短數字會讓 log 裡相同的數字都被遮掉。
+   要發到群組的某個主題時，另外在同一頁的 Variables 分頁建立 repository variable `TELEGRAM_THREAD_ID`。它是 variable 而不是 secret：GitHub 會把 secret 的值從 log 遮掉（[GitHub 文件](https://docs.github.com/en/actions/concepts/security/secrets)），`7` 這種短數字會讓 log 裡相同的數字都被遮掉。
 
 5. 在 Settings → Pages → Build and deployment，把 Source 設為 **GitHub Actions**。
 6. 第一次執行：
@@ -81,11 +81,11 @@ KEV 每筆 CVE 的完整紀錄每次補抓 100 筆，大約 18 小時補齊；�
 
 要把訊息發到開啟 Topics 的群組裡的某個主題：
 
-1. 在群組設定開啟 Topics。有主題的群組是超級群組，一般群組升級後 chat ID 會改變，要更新 `TELEGRAM_CHAT_ID`。
+1. 在群組設定開啟 Topics。有主題的群組是超級群組，一般群組升級後會換成新的 chat ID（[`migrate_to_chat_id`](https://core.telegram.org/bots/api#message)），要更新 `TELEGRAM_CHAT_ID`。
 2. 在目標主題裡傳 `/start@<bot 帳號>`。
 3. 在上面 `getUpdates` 的回應中，這則訊息的 `message.message_thread_id` 就是主題 ID，存成 repository variable `TELEGRAM_THREAD_ID`。
 
-沒有設定 `TELEGRAM_THREAD_ID` 時，訊息發到 General。值不是正整數時不發送任何訊息，workflow 標為失敗。
+沒有設定 `TELEGRAM_THREAD_ID` 時，訊息發到 General（[Telegram 論壇說明](https://core.telegram.org/api/forum)）。值不是正整數時不發送任何訊息，workflow 標為失敗。
 
 | 訊息 | 時機 | 通知音 |
 |---|---|---|
@@ -145,13 +145,13 @@ uv run starfault site                     # 產生網站到 _site/
 |---|---|
 | `0` | 成功 |
 | `1` | 資料來源讀取失敗或 Telegram 發送失敗；已取得的資料照常保存 |
-| `2` | 設定錯誤、技術棧清單格式錯誤或 `TELEGRAM_THREAD_ID` 不合法，沒有執行任何工作 |
+| `2` | 設定錯誤、技術棧清單格式錯誤、`TELEGRAM_THREAD_ID` 不合法或 `--backfill-days` 不在 1 到 90，沒有執行任何工作 |
 
 ## 疑難排解與已知限制
 
-- **KEV 推播晚到**：GitHub Actions 排程延後。需要更即時時，用外部 cron 呼叫 `workflow_dispatch` 觸發 `Hourly`。
+- **KEV 推播晚到**：GitHub Actions 排程延後（[GitHub 文件](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)）。需要更即時時，用外部 cron 呼叫 `workflow_dispatch` 觸發 `Hourly`。
 - **今日頁的來源停更提醒**：CVE 或 KEV 超過 3 小時沒有成功更新，或 EPSS 資料日期比今天早超過 2 天。workflow 失敗時，有設定 Telegram 的群組會收到失敗通知。
-- **CVE 標題一直是英文**：Gemini 免費方案在尖峰時常回應 `503`。沒有譯文時顯示原文，每天執行時再補翻；每次最多翻 `translation.max_per_run` 則。
+- **CVE 標題一直是英文**：starstrata 實際使用時，Gemini 免費方案在尖峰時常回應 `503`。沒有譯文時顯示原文，每天執行時再補翻；每次最多翻 `translation.max_per_run` 則。
 - **詳細頁說「找不到」**：網站只收錄符合推播規則的 CVE；關注 CVE 保留到最後一個事件後 90 天。
 - **技術棧漏報**：產品名稱的寫法不一致時比對不到。上線後用近期 CVE 檢查清單，把漏掉的寫法加進 `match`。
 - **重複推播**：Telegram 確認收到後才記為已推播，發送失敗或中斷時整則重發。Telegram 收下訊息但回應失敗，或長摘要在第一段之後失敗時，已送出的部分會再發一次。

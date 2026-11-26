@@ -27,7 +27,7 @@ def test_kev_real_feed_fields() -> None:
     assert e.triage is True and e.ransomware is False
     assert e.cwes == ("CWE-78",)
     assert e.vendor == "Hewlett Packard Enterprise (HPE)"
-    # BOD 26-04 以前列入的項目 forensicTriage 是 "No"。
+    # 2026-06-25 以前列入的項目 forensicTriage 都是 "No"。
     old = catalog.entries["CVE-2021-40539"]
     assert old.triage is False and old.ransomware is True
     assert "https://nvd.nist.gov/vuln/detail/CVE-2026-103406" in e.note_urls()

@@ -22,10 +22,10 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
 
 - **Cost**: public repositories use GitHub's standard runners for free ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)). The hourly workflow runs 24 times a day.
 - **Coverage**: the site only lists CVEs that match an alert rule (KEV, rising EPSS, critical). Look up other CVEs on [CVE.org](https://www.cve.org) or [NVD](https://nvd.nist.gov).
-- **Alert timing**: GitHub Actions delays scheduled runs under load, so a KEV alert may arrive tens of minutes to a few hours late.
+- **Alert timing**: GitHub Actions delays scheduled runs under load, and drops some when the load is high enough ([GitHub Docs](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)). A KEV alert can arrive tens of minutes to a few hours late.
 - **Thresholds are provisional**: the `thresholds` values should be calibrated with a week of real data. The "Threshold calibration" table on the Rules page shows how many alerts each threshold would send per day.
 - **The Telegram group must be private**: the "Your stack" section of the daily digest reveals your stack. Do not give the group a public username, and keep the invite link private.
-- **Gemini free tier**: Google may use content sent to its free services to improve its products, and humans may review it ([Gemini API terms](https://aistudio.google.com/docs/terms)). starfault only sends the public titles and descriptions of CVEs listed on the site, never the stack list.
+- **Gemini free tier**: Google uses content sent to its free services to improve its products, and human reviewers may read it ([Gemini API terms](https://aistudio.google.com/docs/terms)). starfault only sends the public titles and descriptions of CVEs listed on the site, never the stack list.
 
 ## Deploy your own
 
@@ -34,7 +34,7 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
    - Set `site.url` to `https://<your-account>.github.io/<repo>/`. With `""`, Telegram messages have no site buttons, and the share preview tags have no URL or image.
    - Set `site.locale` to `zh-TW` or `en` for the site and Telegram messages.
    - Set `translation.target` to the language for CVE titles and descriptions (for example `ja`); `""` turns translation off.
-3. Empty `state/`: it holds the original author's state. Leave the empty directory; the first run recreates it.
+3. Delete every file under `state/` if there are any: they are the original author's state. The first run recreates the directory.
 4. Under Settings → Secrets and variables → Actions, create these secrets:
 
    | Name | Required | Purpose |
@@ -45,7 +45,7 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
    | `GEMINI_API_KEY` | No | Translation (default provider), free from [Google AI Studio](https://aistudio.google.com). Without it the original text is shown |
    | `ANTHROPIC_API_KEY` | No | Uses Claude when `translation.provider` is `anthropic` |
 
-   To post into a topic of a group, also create the repository variable `TELEGRAM_THREAD_ID` on the Variables tab of the same page. It is a variable rather than a secret: GitHub masks secret values in logs, and a short number such as `7` would mask every matching number in the logs.
+   To post into a topic of a group, also create the repository variable `TELEGRAM_THREAD_ID` on the Variables tab of the same page. It is a variable rather than a secret: GitHub masks secret values in logs ([GitHub Docs](https://docs.github.com/en/actions/concepts/security/secrets)), and a short number such as `7` would mask every matching number in the logs.
 
 5. Under Settings → Pages → Build and deployment, set Source to **GitHub Actions**.
 6. First run:
@@ -81,11 +81,11 @@ Full CVE records for KEV entries are fetched 100 per run, so they are complete a
 
 To post into a topic of a group with Topics enabled:
 
-1. Enable Topics in the group settings. A group with topics is a supergroup; when a basic group is upgraded its chat ID changes, so update `TELEGRAM_CHAT_ID`.
+1. Enable Topics in the group settings. A group with topics is a supergroup; when a basic group is upgraded it gets a new chat ID ([`migrate_to_chat_id`](https://core.telegram.org/bots/api#message)), so update `TELEGRAM_CHAT_ID`.
 2. Send `/start@<bot username>` in the target topic.
 3. In the `getUpdates` response above, that message's `message.message_thread_id` is the topic ID. Save it as the repository variable `TELEGRAM_THREAD_ID`.
 
-Without `TELEGRAM_THREAD_ID`, messages go to General. If the value is not a positive integer, nothing is sent and the workflow fails.
+Without `TELEGRAM_THREAD_ID`, messages go to General ([Telegram forums](https://core.telegram.org/api/forum)). If the value is not a positive integer, nothing is sent and the workflow fails.
 
 | Message | When | Sound |
 |---|---|---|
@@ -145,13 +145,13 @@ uv run starfault site                     # build the site into _site/
 |---|---|
 | `0` | Success |
 | `1` | A data source or Telegram failed; data already fetched is still saved |
-| `2` | Invalid configuration, invalid stack list or invalid `TELEGRAM_THREAD_ID`; nothing was done |
+| `2` | Invalid configuration, invalid stack list, invalid `TELEGRAM_THREAD_ID` or `--backfill-days` outside 1 to 90; nothing was done |
 
 ## Troubleshooting and known limitations
 
-- **KEV alerts arrive late**: GitHub Actions delays scheduled runs. For faster alerts, trigger `Hourly` through `workflow_dispatch` from an external cron.
+- **KEV alerts arrive late**: GitHub Actions delays scheduled runs ([GitHub Docs](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)). For faster alerts, trigger `Hourly` through `workflow_dispatch` from an external cron.
 - **Stale-source notice on Today**: CVE or KEV has not updated successfully for over 3 hours, or the EPSS data is more than 2 days old. When a workflow fails, a Telegram group that is set up receives a failure notice.
-- **CVE titles stay in English**: the Gemini free tier often answers `503` at peak times. Untranslated text is shown as is and retried every day, at most `translation.max_per_run` texts per run.
+- **CVE titles stay in English**: in starstrata's use, the Gemini free tier often answered `503` at peak times. Untranslated text is shown as is and retried every day, at most `translation.max_per_run` texts per run.
 - **A detail page says "not found"**: the site only lists CVEs that match an alert rule; watched CVEs are kept for 90 days after their last event.
 - **Missed stack matches**: a product written in a way your list does not cover is not matched. After going live, check the list against recent CVEs and add the missing spellings to `match`.
 - **Duplicate alerts**: alerts are recorded only after Telegram confirms them, so a failed or interrupted send is retried in full. If Telegram accepted the message but the response failed, or a long digest failed after its first part, the retry sends those parts again.

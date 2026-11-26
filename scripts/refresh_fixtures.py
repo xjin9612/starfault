@@ -21,7 +21,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
 # 測試涵蓋的紀錄類型；換日期後挑出同類型的紀錄時，要一併改測試。
 CVE_IDS = sorted(p.stem for p in (FIXTURES / "cvelist").glob("CVE-*.json"))
 # EPSS 另外保留百分位為 1.0 的紀錄，測試百分位的顯示。
-EPSS_EXTRA = {"CVE-1999-0001", "CVE-2014-3566"}
+EPSS_EXTRA = {"CVE-2014-3566"}
 
 
 def _kev(http: Http) -> set[str]:

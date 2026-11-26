@@ -87,9 +87,6 @@ class Context:
         return f"{_e(cve_id)} {_a(cve_org_url(cve_id), 'CVE.org')}{sep}{_a(nvd_url(cve_id), 'NVD')}"
 
 
-# ---------------------------------------------------------------- KEV
-
-
 def kev_message(ctx: Context, entry: Entry, kev: KevEntry, hits: Sequence[Product]) -> Message:
     m = ctx.messages
     cvss = entry.cvss
@@ -168,8 +165,6 @@ def push_kev(
         result.sent += 1
     return result
 
-
-# ---------------------------------------------------------------- 每日摘要
 
 # UTC 日 → 該日新增或更新的紀錄。digest 用它取得技術棧比對所需的完整紀錄。
 LoadRecords = Callable[[list[date]], Mapping[str, CveRecord]]

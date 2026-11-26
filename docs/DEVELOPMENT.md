@@ -82,7 +82,7 @@ tests/                    pytest；fixtures/ 是真實資料的節錄；e2e/ 是
 | `gemini` | 呼叫 Gemini API 取得 JSON 回應 |
 | `cli` | 命令列入口 |
 
-`telegram`、`translate`、`gemini` 的行為與 starstrata 相同。
+`telegram`、`gemini` 與 starstrata 的同名模組相同。`translate` 的檔案格式與流程相同，差別是提示詞針對 CVE 內容、每次請求等待 60 秒，以及譯文長度超過原文 3 倍加 200 字元時不採用。
 
 ## 執行流程
 
@@ -317,9 +317,9 @@ note = "前端代理"                  # 選填：顯示在推播
 |---|---|
 | `0` | 成功 |
 | `1` | 資料來源讀取失敗或 Telegram 發送失敗；已取得的資料照常寫入。`cve` 套用已讀到的 delta，`eod_through` 只推進到讀成功的日子 |
-| `2` | 設定錯誤、技術棧清單格式錯誤或 `TELEGRAM_THREAD_ID` 不合法，沒有執行任何工作 |
+| `2` | 設定錯誤、技術棧清單格式錯誤、`TELEGRAM_THREAD_ID` 不合法或 `--backfill-days` 不在 1 到 90，沒有執行任何工作 |
 
-`translate` 除了設定錯誤以外一律回傳 `0`，翻譯失敗只記警告。翻譯的流程、提示詞的防護與失敗處理與 starstrata 相同，模型設定在 `[translation]`。
+`translate` 除了設定錯誤以外一律回傳 `0`，翻譯失敗只記警告。每次最多翻 `translation.max_per_run` 則；連續 3 批失敗時停止，累計失敗 3 次的文字排到最後，次數記在 `translation_failures.json`。提示詞要求模型把輸入當成資料，不照其中的要求做。模型設定在 `[translation]`。
 
 log 會出現在公開 repo 的 Actions 頁面：不印技術棧名稱、命中的 CVE 與命中數。
 
@@ -339,9 +339,9 @@ log 會出現在公開 repo 的 Actions 頁面：不印技術棧名稱、命中�
 - hourly 與 daily 共用 concurrency group `state`，同時只有一個執行在改狀態檔。設 `queue: max`：預設只保留一個排隊中的執行，更晚的會取代它（[官方文件](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)）。
 - 各步驟的逾時加總不超過 job 的逾時：hourly 30 分對 40 分，daily 55 分對 65 分。
 - `backfill_days` 不是 `0` 時一律交給 `starfault cve --backfill-days` 檢查，不合法的值讓步驟失敗。
-- 資料來源或推播失敗時，後續步驟照常執行，job 最後標為失敗並發送 Telegram 失敗通知。通知依 `site.locale` 選用繁中或英文；讀不到設定時用繁中。失敗通知用與 `cli.thread_id` 相同的規則決定是否帶 `message_thread_id`，不合法的值照帶，由 Telegram 拒絕。
+- 資料來源或推播失敗時，後續步驟照常執行，job 最後標為失敗並發送 Telegram 失敗通知。例外：`kev` 失敗時略過 KEV 推播；`cve` 失敗時略過每日摘要，因為技術棧段落要用完整的每日紀錄，摘要隔天補發。通知依 `site.locale` 選用繁中或英文；讀不到設定時用繁中。失敗通知用與 `cli.thread_id` 相同的規則決定是否帶 `message_thread_id`，不合法的值照帶，由 Telegram 拒絕。
 - `deploy` job 在網站產生並上傳後執行；資料來源失敗時網站照常部署，停更提醒顯示在網站上。
-- GitHub Actions 的排程在負載高時會延後，KEV 推播可能晚幾十分鐘到數小時。需要更即時時，改用外部 cron 觸發 `workflow_dispatch`。
+- GitHub Actions 的排程在負載高時會延後，負載夠高時會丟棄部分執行（[官方文件](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)）。KEV 推播會晚幾十分鐘到數小時；daily 被丟棄時，每日摘要延到隔天。需要更即時時，改用外部 cron 觸發 `workflow_dispatch`。
 - 第三方 action 一律固定到 commit SHA；runner 固定為 `ubuntu-26.04`。
 - `GITHUB_TOKEN` 權限：主要 job 為 `contents: write`，`deploy` job 為 `pages: write`、`id-token: write`。
 

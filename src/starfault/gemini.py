@@ -16,7 +16,7 @@ API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 # 每次呼叫最多嘗試次數。429 與 5xx 的重試間隔依序為 5、10 秒。
 MAX_ATTEMPTS = 3
-# 每次請求等待回應的秒數。報告解讀的提示含 README，回應較慢。
+# 每次請求等待回應的秒數。
 DEFAULT_TIMEOUT = 120.0
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 _FALLBACK_STATUS = _RETRY_STATUS | {404}

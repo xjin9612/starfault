@@ -33,7 +33,7 @@ log = logging.getLogger("starfault")
 
 # 資料來源或發送失敗；已取得的資料照常寫入。
 EXIT_FAILED = 1
-# 設定錯誤或缺少必要的環境變數，沒有執行任何工作。
+# 設定或技術棧清單格式錯誤、TELEGRAM_THREAD_ID 不合法、--backfill-days 超出範圍；沒有執行任何工作。
 EXIT_USAGE = 2
 # 每次執行最多為 KEV 與關注清單抓取幾筆單筆紀錄。
 RECORD_BUDGET = 100
