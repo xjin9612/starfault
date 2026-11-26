@@ -10,7 +10,7 @@ import pytest
 
 from starfault import kev as kev_source
 from starfault.state import State
-from tests.builders import SITE_URL, cve, kev_feed, kev_item
+from tests.builders import FIXTURES, SITE_URL, config_text, cve, kev_feed, kev_item
 from tests.conftest import Run
 from tests.fakes import FakeSources
 
@@ -191,9 +191,17 @@ def test_invalid_thread_id_sends_nothing(
     assert fake.sent == []
 
 
+@pytest.mark.parametrize(
+    ("locale", "line"),
+    [
+        ("zh-TW", "命中你的技術棧：Quillstore（文件庫）、Quill Mirror"),
+        ("en", "Matches your stack: Quillstore (文件庫), Quill Mirror"),
+    ],
+)
 def test_stack_hit_is_added_to_kev_alert(
-    run: Run, fake: FakeSources, workdir: Path, telegram: None
+    run: Run, fake: FakeSources, workdir: Path, telegram: None, locale: str, line: str
 ) -> None:
+    (workdir / "config.toml").write_text(config_text(locale=locale))
     _setup(fake)
     run("kev", now=NOW)
     hit = kev_item("CVE-2026-90009", added="2026-11-25", vendor="Quillstore", product="Quillstore")
@@ -202,9 +210,14 @@ def test_stack_hit_is_added_to_kev_alert(
         "CVE-2026-90009", vendor="Quillstore", product="Quillstore"
     )
     run("kev", now=NOW)
-    watchlist = Path(__file__).parent / "fixtures" / "watchlist.toml"
+    watchlist = workdir / "watchlist.toml"
+    watchlist.write_text(
+        (FIXTURES / "watchlist.toml").read_text(encoding="utf-8")
+        + '[[product]]\nname = "Quill Mirror"\nmatch = ["quillstore"]\n',
+        encoding="utf-8",
+    )
     assert run("push", now=NOW, watchlist=watchlist) == 0
-    assert fake.sent[0].text.splitlines()[-1] == "命中你的技術棧：Quillstore（文件庫）"
+    assert fake.sent[0].text.splitlines()[-1] == line
     # 狀態檔不記技術棧。
     state_text = "".join(p.read_text() for p in (workdir / "state").rglob("*.json"))
     assert "文件庫" not in state_text

@@ -35,6 +35,8 @@ class Messages:
     epss_date: str
     title_sep: str
     list_sep: str
+    # 名稱後加註，例如技術棧的 note。
+    note: str
 
 
 ZH_TW = Messages(
@@ -64,6 +66,7 @@ ZH_TW = Messages(
     epss_date="EPSS 資料日期 {date}，還沒有更新的分數。",
     title_sep="：",
     list_sep="、",
+    note="{text}（{note}）",
 )
 
 EN = Messages(
@@ -93,6 +96,7 @@ EN = Messages(
     epss_date="EPSS data is from {date}; no newer scores yet.",
     title_sep=": ",
     list_sep=", ",
+    note="{text} ({note})",
 )
 
 MESSAGES = {"zh-TW": ZH_TW, "en": EN}

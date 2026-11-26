@@ -50,9 +50,6 @@ class Product:
         vendor_words = normalize(vendor)
         return any(_contains(vendor_words, v) for v in self.vendors)
 
-    def label(self) -> str:
-        return f"{self.name}（{self.note}）" if self.note else self.name
-
 
 @dataclass(frozen=True)
 class Watchlist:

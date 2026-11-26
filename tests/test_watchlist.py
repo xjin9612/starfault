@@ -100,13 +100,6 @@ def test_errors_never_include_list_content(text: str, message: str) -> None:
     assert info.value.__cause__ is None
 
 
-def test_label_with_and_without_note() -> None:
-    text = '[[product]]\nname = "A"\nmatch = ["a"]\nnote = "n"\n'
-    text += '[[product]]\nname = "B"\nmatch = ["b"]\n'
-    products = parse(text).products
-    assert [p.label() for p in products] == ["A（n）", "B"]
-
-
 def test_example_file_is_valid() -> None:
     from tests.builders import REPO_ROOT
 

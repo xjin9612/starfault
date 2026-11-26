@@ -107,7 +107,8 @@ def kev_message(ctx: Context, entry: Entry, kev: KevEntry, hits: Sequence[Produc
         due.append(m.ransomware)
     lines.append(_e(m.sep.join(due)))
     if hits:
-        lines.append(_e(m.stack_hit.format(labels=m.list_sep.join(p.label() for p in hits))))
+        labels = (m.note.format(text=p.name, note=p.note) if p.note else p.name for p in hits)
+        lines.append(_e(m.stack_hit.format(labels=m.list_sep.join(labels))))
     buttons = []
     if ctx.cfg.site.url:
         buttons.append(Button(m.btn_detail, detail_url(ctx.cfg.site.url, entry.id)))
@@ -261,7 +262,7 @@ def _stack_line(ctx: Context, record: CveRecord, hits: Sequence[Product]) -> str
     )
     notes = m.list_sep.join(p.note for p in hits if p.note)
     if notes:
-        detail += f"（{notes}）" if ctx.cfg.site.locale == "zh-TW" else f" ({notes})"
+        detail = m.note.format(text=detail, note=notes)
     head = f"{ctx.cve_link(record.id)}  {_e(names + m.title_sep + title)}  {_e(score)}"
     return f"{head}\n  {_e(detail)}"
 
