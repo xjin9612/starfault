@@ -163,6 +163,16 @@ def _epss_history(state: State) -> tuple[dict[str, list[dict[str, Any]]], date |
     return hist, (days[0] if days else None)
 
 
+def _tracked_since(e: Entry) -> date | None:
+    """因 Critical 或 KEV 開始保存 EPSS 分數的日子。
+
+    epss/ 只保存已在關注清單或 KEV 的 CVE。開始保存之後才第一次有分數，走勢的第一天
+    才是第一次有 EPSS 的日子；因 EPSS 跨過才加入的 CVE 不知道更早的分數。
+    """
+    days = [d for d in (e.watch.critical if e.watch else None, e.kev.added if e.kev else None) if d]
+    return min(days) if days else None
+
+
 def _daily(state: State, today: date) -> list[dict[str, Any]]:
     """近 CHART_DAYS 天每日新 CVE 數；第一筆紀錄之前的日子不列。"""
     days = state.daily_days()
@@ -183,9 +193,7 @@ def _daily(state: State, today: date) -> list[dict[str, Any]]:
 def _stats(state: State, cfg: Config, view: SiteView, today: date) -> dict[str, Any]:
     """門檻校準：最近 CALIBRATION_DAYS 個完整的日子，各門檻每天平均會推播幾則。
 
-    EPSS：發布 epss_window_days 天內的新 CVE 首次達到門檻的則數。
-    CVSS：當天發布、或當天第一次有分數的 CVE 中，分數達到門檻的則數。
-    days 是期間內有每日紀錄的天數，平均以它為分母。
+    計算方式見 docs/DEVELOPMENT.md「門檻校準」。平均以期間內有每日紀錄的天數為分母。
     """
     end = today - timedelta(days=1)
     start = end - timedelta(days=CALIBRATION_DAYS - 1)
@@ -196,20 +204,21 @@ def _stats(state: State, cfg: Config, view: SiteView, today: date) -> dict[str, 
     cvss_levels = sorted({*CVSS_LEVELS, cfg.thresholds.cvss})
     cvss_counts = dict.fromkeys(cvss_levels, 0)
     new_cves = 0
-    look_back = start - timedelta(days=cfg.thresholds.epss_window_days)
-    for day in sorted(recorded):
-        if day < look_back or day > end:
-            continue
-        daily = state.load_daily(day)
+    look_back = start - timedelta(days=cfg.thresholds.epss_window_days - 1)
+    dailies = [state.load_daily(d) for d in sorted(recorded) if look_back <= d <= end]
+    # 補上分數的 CVE 只算在補上分數那天。
+    rescored = {i for daily in dailies for i in daily.rescored}
+    for daily in dailies:
         for row in daily.new.values():
             for t in epss_counts:
                 crossed = row.cross.get(level_key(t))
                 if crossed and start.isoformat() <= crossed <= end.isoformat():
                     epss_counts[t] += 1
-        if day < start:
+        if daily.day < start:
             continue
         new_cves += len(daily.new)
-        scores = [r.score for r in daily.new.values()] + [s for s, _ in daily.rescored.values()]
+        scores = [r.score for i, r in daily.new.items() if i not in rescored]
+        scores += [s for s, _ in daily.rescored.values()]
         for t in cvss_levels:
             cvss_counts[t] += sum(1 for s in scores if s is not None and s >= t)
     n = len(have)
@@ -312,9 +321,9 @@ def build_site(
     details = {e.id: e for e in (*view.cves, *view.kev)}
     for cve_id, e in details.items():
         h = hist.get(cve_id, [])
-        # 發布日在保存的第一天之後，走勢的第一天才是第一次有分數的日子。
         first = None
-        if h and first_day and e.published and e.published >= first_day:
+        tracked = _tracked_since(e)
+        if h and first_day and tracked and first_day <= tracked < date.fromisoformat(h[0]["d"]):
             first = date.fromisoformat(h[0]["d"])
         write_compact(data / "cve" / f"{cve_id}.json", _detail(e, h, first, tx))
     return SiteStats(len(view.cves), len(view.kev), len(details))

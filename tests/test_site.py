@@ -3,15 +3,27 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+import subprocess
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from starfault import translate
-from starfault.state import State
-from tests.builders import SITE_URL, config_text, cve, epss_csv, kev_feed, kev_item
+from starfault.records import parse_record
+from starfault.site_page import detect_repo, fill_index
+from starfault.state import Daily, Row, State, Watch
+from tests.builders import (
+    REPO_ROOT,
+    SITE_URL,
+    config_text,
+    cve,
+    epss_csv,
+    kev_feed,
+    kev_item,
+    make_config,
+)
 from tests.conftest import Run
 from tests.fakes import FakeSources
 
@@ -169,8 +181,9 @@ def test_detail_files(site: Path) -> None:
     assert d["epss_hist"] == [{"d": "2026-11-25", "s": 0.9, "p": 0.99999}]
     # 發布日早於保存的 EPSS 第一天，不知道第一次有分數的日子。
     assert [e["type"] for e in d["timeline"]] == ["published", "kev"]
+    # 因 EPSS 跨過才開始保存分數，不知道更早有沒有分數。
     hot = _load(site, "cve/CVE-2026-93002")
-    assert [e["type"] for e in hot["timeline"]] == ["published", "epss_first", "epss_cross"]
+    assert [e["type"] for e in hot["timeline"]] == ["published", "epss_cross"]
     # 沒有完整紀錄的 KEV：用 KEV 目錄的內容。
     old = _load(site, "cve/CVE-2020-0001")
     assert old["desc"] == "Halden Networks EdgeGate VPN contains a vulnerability."
@@ -213,9 +226,92 @@ def test_index_html_is_filled(site: Path) -> None:
     assert '<html lang="zh-Hant">' in html
     assert f'<meta property="og:url" content="{SITE_URL}">' in html
     assert "<!-- site:meta -->" not in html
-    # 沒有 GITHUB_REPOSITORY 也沒有 origin remote 時，頁尾不放 GitHub 連結。
-    assert "__REPO_URL__" not in html
+    assert "site:repo-link" not in html
     assert (site / "icon.svg").is_file() and (site / "social-preview.png").is_file()
+
+
+def test_fill_index_repo_link() -> None:
+    text = (REPO_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    cfg = make_config()
+    linked = fill_index(text, cfg, "owner/name")
+    assert 'href="https://github.com/owner/name"' in linked and ">owner/name<" in linked
+    assert "site:repo-link" not in linked and "__REPO" not in linked
+    plain = fill_index(text, cfg, None)
+    assert "github.com" not in plain and "site:repo-link" not in plain and "__REPO" not in plain
+
+
+def test_detect_repo(tmp_path: Path) -> None:
+    assert detect_repo({"GITHUB_REPOSITORY": "owner/name"}, tmp_path) == "owner/name"
+    assert detect_repo({"GITHUB_REPOSITORY": "not a repo"}, tmp_path) is None
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for remote, repo in [
+        ("git@github.com:owner/name.git", "owner/name"),
+        ("https://github.com/owner/name", "owner/name"),
+        ("https://gitlab.example/owner/name.git", None),
+    ]:
+        subprocess.run(["git", "-C", str(tmp_path), "remote", "remove", "origin"], check=False)
+        subprocess.run(["git", "-C", str(tmp_path), "remote", "add", "origin", remote], check=True)
+        assert detect_repo({}, tmp_path) == repo, remote
+
+
+SITE_TODAY = date(2026, 11, 26)
+
+
+def _days_ago(n: int) -> date:
+    return SITE_TODAY - timedelta(days=n)
+
+
+def _site_from_state(run: Run, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])
+    out = workdir / "site"
+    assert run("site", "--out", str(out), "--web", "web", "--assets", "assets", now=NOW) == 0
+    return out
+
+
+def test_window_boundaries(run: Run, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    state = State(workdir / "state")
+    old = "2026-07-01T00:00:00Z"
+    for cve_id, cross in [
+        ("CVE-2026-93101", _days_ago(89)),
+        ("CVE-2026-93102", _days_ago(90)),
+        ("CVE-2026-93103", _days_ago(6)),
+        ("CVE-2026-93104", _days_ago(7)),
+    ]:
+        state.save_watch(Watch(parse_record(cve(cve_id, published=old)), epss_cross=cross))
+    for age in (30, 29):
+        state.save_daily(Daily(_days_ago(age)))
+    site = _site_from_state(run, workdir, monkeypatch)
+    # 關注 CVE 收錄最後事件在近 90 天內的；近 7 天、圖表 30 天都含今天。
+    ids = {i["id"] for i in _load(site, "cves")["items"]}
+    assert ids == {"CVE-2026-93101", "CVE-2026-93103", "CVE-2026-93104"}
+    assert _load(site, "meta")["counts"]["epss_7d"] == 1
+    days = _load(site, "daily")["days"]
+    assert days[0]["date"] == _days_ago(29).isoformat() and len(days) == 30
+
+
+def test_rescored_cves_count_once_in_calibration(
+    run: Run, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = State(workdir / "state")
+    # 11-20 發布時沒有分數，11-22 補上 9.8：只算在 11-22。
+    state.save_daily(Daily(_days_ago(6), new={"CVE-2026-93201": Row(9.8, "critical")}))
+    state.save_daily(Daily(_days_ago(4), rescored={"CVE-2026-93201": (9.8, "critical")}))
+    stats = _load(_site_from_state(run, workdir, monkeypatch), "stats")
+    assert stats["window"]["days"] == 2
+    assert {x["t"]: x["per_day"] for x in stats["cvss"]}[9.0] == 0.5
+
+
+def test_first_epss_after_tracking_starts(
+    run: Run, fake: FakeSources, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Critical 規則先開始保存分數，之後第一次出現的分數才是第一次有 EPSS。"""
+    state = State(workdir / "state")
+    record = parse_record(cve("CVE-2026-93301", published="2026-11-24T02:00:00Z", score=9.8))
+    state.save_watch(Watch(record, critical=date(2026, 11, 24)))
+    state.save_epss_day(date(2026, 11, 24), {})
+    state.save_epss_day(date(2026, 11, 25), {"CVE-2026-93301": (0.02, 0.5)})
+    detail = _load(_site_from_state(run, workdir, monkeypatch), "cve/CVE-2026-93301")
+    assert {"date": "2026-11-25", "type": "epss_first"} in detail["timeline"]
 
 
 def test_translations_add_tr_fields(

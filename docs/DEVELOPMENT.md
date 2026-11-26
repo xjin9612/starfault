@@ -175,7 +175,7 @@ flowchart TD
 | `watch/<CVE>.json` | 關注清單每筆 CVE 的解析後紀錄，加上 `epss_cross`（首次跨過門檻的 EPSS 日期）與 `critical`（符合 Critical 規則的日期） |
 | `daily/<YYYY-MM-DD>.json` | 當天（`site.timezone`）發布的全部新 CVE：`new` 每列 `[id, cvss, sev, cross]`；當天第一次有 CVSS 的 `rescored` 每列 `[id, cvss, sev]`；`baseline` 是還沒和 EPSS 比對過的晚到 CVE。保留 90 天 |
 | `epss.json` | 最新 EPSS 檔的 `date`、`model`、`score_date` |
-| `epss/<YYYY-MM-DD>.json` | 當天關注清單與 KEV 的 EPSS 分數 `{ CVE: [epss, percentile] }`，詳細頁的走勢圖用。保留 30 天 |
+| `epss/<YYYY-MM-DD>.json` | 當天關注清單與 KEV 的 EPSS 分數 `{ "date": …, "scores": { CVE: [epss, percentile] } }`，詳細頁的走勢圖用。保留 30 天 |
 | `translations.jsonl` | 譯文，格式與 starstrata 相同：每行 `key`、`lang`、`text`；`key` 是原文正規化空白後 SHA-256 的前 16 個十六進位字元 |
 | `translation_failures.json` | 各 `key` 翻譯失敗的累計次數；沒有失敗紀錄時刪除 |
 
@@ -255,7 +255,7 @@ note = "前端代理"                  # 選填：顯示在推播
 - `counts.critical_7d` 與今日頁的 Critical 清單只算發布 7 天內的。
 - `*_tr` 只在設定了翻譯且有譯文時輸出。
 - `cve/<CVE>.json` 為 `cves.json` 與 `kev.json` 的每一筆產生。KEV 項目沒有完整紀錄時，描述、廠商、產品、CWE 取自 KEV，參考連結取 `notes` 裡的網址。
-- 時間軸的「第一次有 EPSS」只在發布日不早於保存的第一天 EPSS 時列出，否則不知道真正的第一天。
+- `epss/` 只保存已在關注清單或 KEV 的 CVE。時間軸的「第一次有 EPSS」只在 CVE 因 Critical 或 KEV 開始保存的日子不早於保存的第一天、且早於走勢第一天時列出；因 EPSS 跨過才加入的 CVE 不知道更早的分數，不列出。
 - `index.html` 的填入位置與 starstrata 相同：`<html lang>`、`<!-- site:meta -->`、`<!-- site:repo-link -->` 到 `<!-- /site:repo-link -->`。repo 依序取 `GITHUB_REPOSITORY` 與 git 的 `origin` remote。
 
 ### 門檻校準
@@ -263,7 +263,7 @@ note = "前端代理"                  # 選填：顯示在推播
 `stats.json` 看最近 7 個完整的日子（昨天往前 7 天）：
 
 - `epss`：校準門檻 1%、5%、10%、20%、50%（設定的門檻不在其中時另外加入）。每個門檻的則數是 `daily/` 中發布 `epss_window_days` 天內的新 CVE，`cross` 記錄的首次達到日期落在期間內的筆數。
-- `cvss`：校準門檻 9.0、9.5、10.0（同上）。則數是期間內每天的新 CVE 與 `rescored` 中，分數達到門檻的筆數。這是近似值：不排除已經有 EPSS 的 CVE。
+- `cvss`：校準門檻 9.0、9.5、10.0（同上）。則數是期間內每天的新 CVE 與 `rescored` 中，分數達到門檻的筆數；補上分數的 CVE 只算在補上分數那天。這是近似值：不排除已經有 EPSS 的 CVE。
 - 平均以期間內有每日紀錄的天數為分母，`window.days` 記錄這個天數。
 - `kev_per_day`：期間內列入 KEV 的筆數除以 7。
 
