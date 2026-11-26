@@ -221,12 +221,13 @@ note = "前端代理"                  # 選填：顯示在推播
 - `match` 必須以完整詞出現在產品名稱裡：`quillstore` 不會命中 `quillstoreson`。有 `vendors` 時，廠商名稱也要以完整詞包含其中之一，用來排除同名產品。
 - 比對對象：CNA 與 CISA ADP 的 `affected[].vendor`／`product`、`cpes` 的 vendor 與 product、KEV 的 `vendorProject`／`product`。只比對產品，不看版本。
 - 每日摘要的段落處理 `digest.last_day` 之後到昨天的 `daily/` 紀錄（新 CVE 與 `rescored`），最多回溯 7 天；沒有 `last_day` 時只處理昨天。比對用的完整紀錄從這些日子的 delta 重新讀取。
+- 重新讀取 delta 失敗時，摘要略過技術棧段落，其他段落照常發送；`last_day` 不前進，結束碼 `1`。
 - KEV 推播用同一份清單比對 KEV 欄位與 CVE 紀錄，命中時加一行「命中你的技術棧」。
 - EPSS 段落的項目命中時，在該行加註命中的產品。
 - 推播連結：CVE 在網站有收錄就連詳細頁；只因技術棧命中的 CVE 連 CVE.org 與 NVD。
 - 翻譯只處理網站收錄的 CVE，只因技術棧命中的 CVE 不會出現在 `translations.jsonl`。
 
-公開輸出（log、`state/`、網站、commit 訊息）不得出現清單內容與比對結果。`tests/test_privacy.py` 用虛構清單跑完 hourly 與 daily 的全部指令，再用一份不會命中的清單跑一次，比對兩次的 log、`state/` 與網站完全相同，並檢查清單的字串都沒有出現。
+公開輸出（log、`state/`、網站、commit 訊息）不得出現清單內容與比對結果。`tests/test_privacy.py` 用虛構清單跑完 hourly 與 daily 的全部指令，再用一份不會命中的清單跑一次。兩次的 log、結束碼、`state/`、網站、送去翻譯的文字與向資料來源發出的請求必須完全相同，清單的字串也不得出現。公開規則沒有項目、摘要只剩技術棧段落的情況另外比對，包括發送失敗。
 
 ## 網站資料
 
@@ -281,6 +282,7 @@ note = "前端代理"                  # 選填：顯示在推播
 - `TELEGRAM_THREAD_ID`：沒有設定或只有空白時不帶 `message_thread_id`；去掉前後空白後是正整數時每則訊息都帶上；其他值讓 `push` 與 `digest` 結束碼 `2`，不發送。
 - 推播前寫入 `notified.json`，發送失敗時回滾該筆，下次重試。`sendMessage` 不是冪等：Telegram 收下但回應失敗時可能重複一則，接受這個風險。
 - 每日摘要先寫入 `notified.json` 與 `digest.json` 再發送，失敗時兩個檔案都回滾。
+- 摘要只有技術棧段落時，發送失敗不回滾，結束碼 `0`，這則摘要不補發。回滾與失敗的結束碼都公開，會透露有命中。
 - 未設定 `TELEGRAM_BOT_TOKEN` 或 `TELEGRAM_CHAT_ID` 時，`push` 與 `digest` 略過發送並回傳 `0`，狀態不變。
 - 每日摘要：三類都沒有時不發送，`last_day` 照常前進。「你的技術棧」有內容時有通知音，否則靜音。EPSS 資料日期比今天早超過 1 天時，摘要最後註明 EPSS 日期。
 - 按鈕網址用 `site.url`；`site.url` 為空字串時不附網站按鈕，CVE 編號不加連結。

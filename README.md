@@ -111,6 +111,7 @@ note = "front proxy"                   # optional: shown in alerts
 - List libraries separately, such as the framework or logging package inside your application; starfault does not scan dependencies.
 - New CVEs that match and have CVSS ≥ `watchlist.cvss` (7.0 by default) or no score yet go to the top of the daily digest. When a matching CVE is added to KEV, the alert gets an extra "Matches your stack" line.
 - The list never appears on the site, in state files, in Actions logs or in commits: logs do not print product names, matching CVEs or match counts. CVEs that match only your stack are not added to the site; their alerts link to CVE.org and NVD.
+- If a daily digest contains only the "Your stack" section and Telegram fails, later runs do not resend it, and the run still succeeds. A failed run or a resend would show in public that something matched.
 - For local testing, put the list in `watchlist.toml` at the repository root. It is listed in `.gitignore`.
 
 ## Configuration

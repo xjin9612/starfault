@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from urllib.parse import quote
 
 from starfault.config import Config
+from starfault.http import FetchError
 from starfault.kev import CATALOG_URL, KevEntry
 from starfault.messages import Messages
 from starfault.records import CveRecord
@@ -199,10 +200,13 @@ class Digest:
     message: Message | None
     # (CVE, 原因)：發送前寫入 notified.json。
     marks: list[tuple[str, str]] = field(default_factory=list)
+    # 技術棧段落處理到的日子；讀取 CVE 紀錄失敗時為 None，下次重新處理。
     last_day: date | None = None
     # 統計，寫進 log；不含技術棧。
     epss: int = 0
     critical: int = 0
+    # 技術棧段落讀取 CVE 紀錄失敗；其他段落照常發送。
+    stack_error: FetchError | None = None
 
 
 def _stack_section(
@@ -342,11 +346,17 @@ def build_digest(
     view = build_view(state, cfg, today)
     ctx = Context(cfg, messages, view, translations, watchlist)
     notified = state.load_notified()
-    stack = _stack_section(ctx, state, days, load_records) if watchlist and days else []
     epss_lines, epss_ids = _epss_section(ctx, state, notified)
     critical_lines, critical_ids = _critical_section(ctx, notified, today)
     marks = [(i, "epss") for i in epss_ids] + [(i, "critical") for i in critical_ids]
     digest = Digest(None, marks, yesterday, len(epss_ids), len(critical_ids))
+    stack: list[str] = []
+    if watchlist and days:
+        try:
+            stack = _stack_section(ctx, state, days, load_records)
+        except FetchError as e:
+            digest.stack_error = e
+            digest.last_day = None
     sections = [s for s in (stack, epss_lines, critical_lines) if s]
     if not sections:
         return digest
@@ -362,7 +372,10 @@ def build_digest(
 
 
 def send_digest(state: State, digest: Digest, send: Send, *, now: datetime) -> None:
-    """寫入已通知與 last_day 後發送；發送失敗時回滾並丟出 TelegramError。"""
+    """寫入已通知與 last_day 後發送；發送失敗時回滾並丟出 TelegramError。
+
+    只有技術棧段落時，發送失敗不回滾也不丟出：回滾與失敗的結束碼會透露有命中。
+    """
     notified = state.load_notified()
     before = {k: dict(v) for k, v in notified.items()}
     previous_day = state.load_digest_day()
@@ -377,6 +390,8 @@ def send_digest(state: State, digest: Digest, send: Send, *, now: datetime) -> N
     try:
         send(digest.message)
     except Exception:
+        if not digest.marks:
+            return
         state.save_notified(before)
         if previous_day:
             state.save_digest_day(previous_day)

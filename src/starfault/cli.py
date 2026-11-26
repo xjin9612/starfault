@@ -360,21 +360,17 @@ def cmd_digest(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
             lambda m: sender.send(m.text, silent=m.silent, buttons=m.buttons),
             now=now,
         )
-    except FetchError as e:
-        log.error("讀取 CVE 紀錄失敗：%s", e)
-        return EXIT_FAILED
     except TelegramError as e:
         log.error("Telegram 發送失敗：%s", e)
         return EXIT_FAILED
     finally:
         http.close()
         sender.close()
-    log.info(
-        "每日摘要%s：EPSS %d 則、Critical %d 則",
-        "已發送" if digest.message else "沒有內容，不發送",
-        digest.epss,
-        digest.critical,
-    )
+    # 不寫是否發送：只有技術棧段落時也會發送。
+    log.info("每日摘要：EPSS %d 則、Critical %d 則", digest.epss, digest.critical)
+    if digest.stack_error:
+        log.error("讀取 CVE 紀錄失敗：%s", digest.stack_error)
+        return EXIT_FAILED
     return 0
 
 

@@ -111,6 +111,7 @@ note = "前端代理"                       # 選填：顯示在推播
 - 函式庫要另外列，例如應用程式內含的框架或 logging 套件；starfault 不掃描相依套件。
 - 命中且 CVSS ≥ `watchlist.cvss`（預設 7.0）或還沒有分數的新 CVE，列在每日摘要最上面。列入 KEV 時，即時推播多一行「命中你的技術棧」。
 - 清單不會出現在網站、狀態檔、Actions log 或 commit：log 不印產品名稱、命中的 CVE 或命中數；只因技術棧命中的 CVE 不收錄進網站，推播連到 CVE.org 與 NVD。
+- 每日摘要只有「你的技術棧」段落時，Telegram 發送失敗後不再補發，workflow 照樣成功。失敗或補發都會公開透露有命中。
 - 本機測試時寫在 repo 根目錄的 `watchlist.toml`，它已列在 `.gitignore`。
 
 ## 設定

@@ -1,15 +1,20 @@
 """技術棧清單不留下公開痕跡：log、state/、網站與 commit 的內容都不能出現清單或比對結果。
 
 用 tests/fixtures/watchlist.toml 的虛構清單跑完 hourly 與 daily 的全部指令，再拿另一份
-一個都不會命中的清單跑一次。兩次的公開輸出（log、state/、網站）必須完全相同，Telegram 訊息除外。
+一個都不會命中的清單跑一次。兩次的公開輸出必須完全相同，Telegram 訊息除外：log、結束碼、
+state/、網站、送去翻譯的文字，以及向資料來源發出的請求。
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import tomllib
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -88,13 +93,40 @@ def _sources() -> FakeSources:
     return fake
 
 
+def _stack_only_sources() -> FakeSources:
+    """公開規則沒有任何項目，摘要只剩技術棧段落。"""
+    fake = FakeSources()
+    fake.kev = kev_feed([kev_item("CVE-2026-92010", added="2026-11-01")], version="2026.11.24")
+    fake.eod[date(2026, 11, 24)] = []
+    fake.hourly[(date(2026, 11, 25), 0)] = STACK_ONLY
+    fake.hourly[(date(2026, 11, 25), 22)] = STACK_ONLY
+    fake.eod[date(2026, 11, 25)] = STACK_ONLY
+    fake.epss = epss_csv({"CVE-2026-92001": (0.01, 0.2)}, "2026-11-25")
+    fake.records["CVE-2026-92010"] = cve("CVE-2026-92010", published="2026-10-01T00:00:00Z")
+    return fake
+
+
+@dataclass
+class Outputs:
+    log: str
+    codes: list[int]
+    fake: FakeSources
+    translated: list[str]
+
+
 def _run_all(
-    root: Path, watchlist: str, caplog: pytest.LogCaptureFixture
-) -> tuple[str, FakeSources]:
+    root: Path,
+    watchlist: str,
+    caplog: pytest.LogCaptureFixture,
+    translated: list[str],
+    sources: Callable[[], FakeSources] = _sources,
+    *,
+    digest_fails: bool = False,
+) -> Outputs:
     root.mkdir()
     (root / "config.toml").write_text(config_text())
     (root / "watchlist.toml").write_text(watchlist, encoding="utf-8")
-    fake = _sources()
+    fake = sources()
     base = ["--config", str(root / "config.toml"), "--state", str(root / "state")]
     base += ["--watchlist", str(root / "watchlist.toml")]
     steps = [
@@ -109,14 +141,17 @@ def _run_all(
         (NOW, ["site", "--out", str(root / "site")]),
     ]
     caplog.clear()
+    translated.clear()
+    codes = []
     for now, args in steps:
-        if args == ["kev"] and now == NOW:
+        if args == ["kev"] and now == NOW and sources is _sources:
             fake.kev = kev_feed(
                 [kev_item("CVE-2026-92010", added="2026-11-01"), KEV_HIT], version="2026.11.25"
             )
+        fake.telegram_fail = digest_fails and args == ["digest"]
         with caplog.at_level(logging.DEBUG):
-            assert main([*base, *args], transport=fake.transport(), now=now) == 0, args
-    return caplog.text, fake
+            codes.append(main([*base, *args], transport=fake.transport(), now=now))
+    return Outputs(caplog.text.replace(str(root), ""), codes, fake, list(translated))
 
 
 def _public_files(root: Path) -> dict[str, str]:
@@ -138,39 +173,79 @@ def _secrets() -> list[str]:
 
 
 @pytest.fixture
-def telegram_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def translated(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """設定 Telegram 與翻譯；回傳送去翻譯的文字。"""
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", BOT_TOKEN)
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "-100")
+    monkeypatch.setenv("GEMINI_API_KEY", "key")
+    texts: list[str] = []
+
+    def generate(api_key: str, models: Any, system: str, prompt: str, *a: Any, **k: Any) -> str:
+        items = json.loads(prompt)["items"]
+        texts.extend(i["text"] for i in items)
+        return json.dumps({"items": [{"id": i["id"], "text": "譯" + i["text"]} for i in items]})
+
+    monkeypatch.setattr("starfault.gemini.generate_json_with_fallback", generate)
+    return texts
 
 
-def test_public_outputs_do_not_depend_on_the_watchlist(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, telegram_env: None
-) -> None:
-    hit_log, hit_fake = _run_all(tmp_path / "hit", WATCHLIST.read_text(encoding="utf-8"), caplog)
-    miss_log, miss_fake = _run_all(tmp_path / "miss", NO_HITS, caplog)
-    # Telegram 訊息確實不同：命中的那次有技術棧段落與 KEV 加註。
-    hit_text = "\n".join(s.text for s in hit_fake.sent)
-    assert "你的技術棧（3）" in hit_text
-    assert "命中你的技術棧：Lantern CMS（對外網站）" in hit_text
-    assert "命中：Quillstore" in hit_text
-    assert "你的技術棧" not in "\n".join(s.text for s in miss_fake.sent)
-    # 公開輸出完全相同。
-    assert hit_log.replace(str(tmp_path / "hit"), "") == miss_log.replace(
-        str(tmp_path / "miss"), ""
-    )
+def _assert_same_public_outputs(tmp_path: Path, hit: Outputs, miss: Outputs) -> None:
+    assert hit.log == miss.log
+    assert hit.codes == miss.codes
+    assert hit.translated == miss.translated
+    sources = [u for u in hit.fake.requested if "api.telegram.org" not in u]
+    assert sources == [u for u in miss.fake.requested if "api.telegram.org" not in u]
     hit_files = _public_files(tmp_path / "hit")
     miss_files = _public_files(tmp_path / "miss")
     assert hit_files.keys() == miss_files.keys()
     for name, text in hit_files.items():
-        if name.endswith("sources.json") or name.endswith("meta.json"):
-            continue
         assert text == miss_files[name], name
 
 
-def test_public_outputs_contain_no_watchlist_content(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, telegram_env: None
+def test_public_outputs_do_not_depend_on_the_watchlist(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, translated: list[str]
 ) -> None:
-    log_text, _ = _run_all(tmp_path / "hit", WATCHLIST.read_text(encoding="utf-8"), caplog)
+    hit = _run_all(tmp_path / "hit", WATCHLIST.read_text(encoding="utf-8"), caplog, translated)
+    miss = _run_all(tmp_path / "miss", NO_HITS, caplog, translated)
+    assert hit.codes == [0] * len(hit.codes)
+    assert hit.translated
+    # Telegram 訊息確實不同：命中的那次有技術棧段落與 KEV 加註。
+    hit_text = "\n".join(s.text for s in hit.fake.sent)
+    assert "你的技術棧（3）" in hit_text
+    assert "命中你的技術棧：Lantern CMS（對外網站）" in hit_text
+    assert "命中：Quillstore" in hit_text
+    assert "你的技術棧" not in "\n".join(s.text for s in miss.fake.sent)
+    _assert_same_public_outputs(tmp_path, hit, miss)
+
+
+@pytest.mark.parametrize("digest_fails", [False, True], ids=["sent", "telegram-fails"])
+def test_digest_with_only_the_stack_section_leaves_no_trace(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, translated: list[str], digest_fails: bool
+) -> None:
+    wl = WATCHLIST.read_text(encoding="utf-8")
+    hit = _run_all(
+        tmp_path / "hit", wl, caplog, translated, _stack_only_sources, digest_fails=digest_fails
+    )
+    miss = _run_all(
+        tmp_path / "miss",
+        NO_HITS,
+        caplog,
+        translated,
+        _stack_only_sources,
+        digest_fails=digest_fails,
+    )
+    telegram = [u for u in hit.fake.requested if "api.telegram.org" in u]
+    assert telegram, "命中的那次要嘗試發送摘要"
+    assert not [u for u in miss.fake.requested if "api.telegram.org" in u]
+    assert ("你的技術棧（3）" in "\n".join(s.text for s in hit.fake.sent)) is not digest_fails
+    _assert_same_public_outputs(tmp_path, hit, miss)
+
+
+def test_public_outputs_contain_no_watchlist_content(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, translated: list[str]
+) -> None:
+    hit = _run_all(tmp_path / "hit", WATCHLIST.read_text(encoding="utf-8"), caplog, translated)
+    log_text = hit.log
     files = _public_files(tmp_path / "hit")
     # 只因技術棧命中的 CVE 不出現在任何公開輸出。
     stack_only = [r["cveMetadata"]["cveId"] for r in STACK_ONLY]
@@ -193,4 +268,5 @@ def test_public_outputs_contain_no_watchlist_content(
         assert not [name for name, text in files.items() if value in text], value
     for value in _secrets():
         assert value.lower() not in log_text.lower(), value
+        assert not [t for t in hit.translated if value.lower() in t.lower()], value
     assert "技術棧" not in log_text

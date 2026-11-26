@@ -269,6 +269,29 @@ def test_failed_send_rolls_back(run: Run, fake: FakeSources, workdir: Path, tele
     assert "你的技術棧（3）" in fake.sent[0].text
 
 
+def test_stack_records_failure_still_sends_public_sections(
+    run: Run, fake: FakeSources, workdir: Path, telegram: None
+) -> None:
+    from starfault import cvelist
+
+    _sources(fake)
+    run("cve", now=EARLY)
+    run("cve", now=NOW)
+    run("epss", now=NOW)
+    fake.status[cvelist.eod_url(date(2026, 11, 24))] = 500
+    assert run("digest", now=NOW, watchlist=WATCHLIST) == 1
+    text = fake.sent[0].text
+    assert "<b>EPSS 跨過 10%（1）</b>" in text and "你的技術棧" not in text
+    state = State(workdir / "state")
+    assert state.load_digest_day() is None
+    assert "epss" in state.load_notified()["CVE-2026-91002"]
+    # 下一次重新處理技術棧段落，已發送的段落不重發。
+    fake.status.clear()
+    assert run("digest", now=NOW, watchlist=WATCHLIST) == 0
+    assert "你的技術棧（3）" in fake.sent[1].text and "EPSS" not in fake.sent[1].text
+    assert state.load_digest_day() == date(2026, 11, 25)
+
+
 def test_thresholds_in_digest_follow_config(
     run: Run, fake: FakeSources, workdir: Path, telegram: None
 ) -> None:
