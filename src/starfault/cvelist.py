@@ -9,11 +9,12 @@ import io
 import json
 import logging
 import zipfile
+import zlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-from starfault.http import Http, NotFoundError
+from starfault.http import FetchError, Http, NotFoundError
 from starfault.records import CveRecord, RecordError, parse_record
 
 log = logging.getLogger(__name__)
@@ -39,6 +40,10 @@ def record_url(cve_id: str) -> str:
     return f"{RAW}/{year}/{int(number) // 1000}xxx/{cve_id}.json"
 
 
+class DeltaFormatError(ValueError):
+    """delta 不是有效的 zip。"""
+
+
 @dataclass
 class Batch:
     """一或多個 delta 解析後的紀錄；同一個 CVE 只留最後讀到的版本。"""
@@ -57,8 +62,13 @@ class Batch:
 
 
 def parse_zip(raw: bytes) -> Batch:
+    """解析 delta zip。不是 zip 時丟出 DeltaFormatError；個別紀錄損毀時計入 invalid。"""
     batch = Batch()
-    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+    try:
+        z = zipfile.ZipFile(io.BytesIO(raw))
+    except zipfile.BadZipFile as e:
+        raise DeltaFormatError(f"不是 zip：{e}") from None
+    with z:
         for info in z.infolist():
             if info.is_dir() or not info.filename.endswith(".json"):
                 continue
@@ -67,31 +77,37 @@ def parse_zip(raw: bytes) -> Batch:
                 continue
             try:
                 record = parse_record(json.loads(z.read(info)))
-            except ValueError, RecordError:
+            except ValueError, zipfile.BadZipFile, zlib.error, EOFError:
                 batch.invalid += 1
                 continue
             batch.records[record.id] = record
     return batch
 
 
+def _fetch_zip(http: Http, url: str) -> Batch:
+    try:
+        return parse_zip(http.get(url))
+    except DeltaFormatError as e:
+        raise FetchError(f"{url}：{e}") from None
+
+
 def fetch_eod(http: Http, day: date) -> Batch | None:
     """UTC 日 day 的 end_of_day delta；還沒發布時回傳 None。"""
     try:
-        raw = http.get(eod_url(day))
+        return _fetch_zip(http, eod_url(day))
     except NotFoundError:
         return None
-    return parse_zip(raw)
 
 
 def fetch_latest_hourly(http: Http, now: datetime) -> Batch | None:
     """now 所在 UTC 日最新的 hourly delta；當天還沒有任何 release 時回傳 None。"""
     for hour in range(now.hour, -1, -1):
         try:
-            raw = http.get(hourly_url(now.date(), hour))
+            batch = _fetch_zip(http, hourly_url(now.date(), hour))
         except NotFoundError:
             continue
         log.info("CVE delta：%s %02d00Z", now.date().isoformat(), hour)
-        return parse_zip(raw)
+        return batch
     return None
 
 
@@ -102,9 +118,10 @@ def fetch_record(http: Http, cve_id: str) -> CveRecord | None:
     except NotFoundError:
         return None
     try:
-        return parse_record(json.loads(raw))
+        data = json.loads(raw)
     except ValueError as e:
-        raise RecordError(f"{cve_id}：{e}") from e
+        raise RecordError(f"{cve_id}：不是 JSON：{e}") from e
+    return parse_record(data)
 
 
 def fetch_utc_days(http: Http, days: Iterable[date], now: datetime) -> Batch:

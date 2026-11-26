@@ -113,8 +113,9 @@ def _flag(value: object, yes: str) -> bool | None:
 def parse_catalog(raw: bytes) -> Catalog:
     """解析 KEV JSON。
 
-    必要欄位（catalogVersion、vulnerabilities、各筆的 cveID、dateAdded、dueDate）缺漏時丟出
-    KevFormatError。forensicTriage 缺漏或無法辨識時當作 false，並記一行警告。
+    必要欄位（catalogVersion、vulnerabilities、各筆的 cveID、dateAdded、dueDate）缺漏，
+    vulnerabilities 是空的，或筆數與 count 不符時丟出 KevFormatError。
+    forensicTriage 缺漏或無法辨識時當作 false，並記一行警告。
     """
     try:
         data = json.loads(raw)
@@ -128,6 +129,12 @@ def parse_catalog(raw: bytes) -> Catalog:
         raise KevFormatError("缺少 catalogVersion")
     if not isinstance(items, list):
         raise KevFormatError("缺少 vulnerabilities")
+    # 截斷的目錄若被當成快照，恢復後整批會被當成新增。
+    if not items:
+        raise KevFormatError("vulnerabilities 是空的")
+    count = data.get("count")
+    if isinstance(count, int) and count != len(items):
+        raise KevFormatError(f"count 是 {count}，vulnerabilities 有 {len(items)} 筆")
     entries: dict[str, KevEntry] = {}
     no_triage = 0
     for item in items:

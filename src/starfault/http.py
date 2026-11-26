@@ -46,7 +46,10 @@ class Http:
         self.close()
 
     def get(self, url: str) -> bytes:
-        """回傳回應內容。404 丟出 NotFoundError，其他失敗丟出 FetchError。"""
+        """回傳回應內容。404 丟出 NotFoundError，其他失敗丟出 FetchError。
+
+        只重試連線錯誤與 5xx；429 等其他狀態碼直接失敗，留給下一次排程。
+        """
         for attempt in range(MAX_ATTEMPTS):
             last = attempt + 1 == MAX_ATTEMPTS
             try:
@@ -56,6 +59,8 @@ class Http:
                     raise FetchError(f"{url}：連線失敗（{type(e).__name__}）") from None
                 self._sleep(2 ** (attempt + 1))
                 continue
+            except httpx.HTTPError as e:
+                raise FetchError(f"{url}：{type(e).__name__}") from None
             status = response.status_code
             if status == 404:
                 raise NotFoundError(f"{url}：回應 404")

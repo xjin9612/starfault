@@ -120,6 +120,9 @@ flowchart TD
 | KEV | 整份 JSON | `catalogVersion`、`dateReleased`；每筆的 `cveID`、`vendorProject`、`product`、`vulnerabilityName`、`shortDescription`、`dateAdded`、`dueDate`、`knownRansomwareCampaignUse`、`forensicTriage`、`requiredAction`、`notes`、`cwes` |
 | EPSS | `epss_scores-current.csv.gz` | `cve`、`epss`、`percentile`；檔頭的 `model_version` 與 `score_date` |
 
+- 每個請求逾時 60 秒，最多嘗試 3 次。連線錯誤與 5xx 間隔 2、4 秒重試；404 與其他狀態碼不重試。GitHub 限流（403、429）時這次讀取失敗，下一次排程再讀。
+- delta 不是 zip 時算讀取失敗。zip 裡個別紀錄損毀、不是 JSON 或超過 5 MB 時略過該筆，計入 log 的「略過格式錯誤」。
+
 ### cvelistV5 的 delta
 
 - hourly release 的 tag 是 `cve_<UTC 日>_<HH>00Z`，asset `<UTC 日>_delta_CVEs_at_<HH>00Z.zip` 包含當天 UTC 0 時以來新增或更新的全部紀錄。
@@ -146,8 +149,9 @@ flowchart TD
 - 每一筆都有 `forensicTriage`，值是字串 `"Yes"` 或 `"No"`，不是布林值。2026-06-25 起才有 `"Yes"`，更早的項目都是 `"No"`。
 - 2026-06 以後列入的 189 筆，期限只有 3 天（146 筆）或 14 天（43 筆）。`forensicTriage` 為 `"Yes"` 的 117 筆期限都是 3 天。
 - `knownRansomwareCampaignUse` 是 `"Known"` 或 `"Unknown"`。
-- 程式接受 `"Yes"`／`"No"` 與布林值。欄位缺漏或值無法辨識時當作 `false`，整份只記一行警告。
+- 程式接受 `"Yes"`／`"No"` 與布林值。`forensicTriage` 缺漏或值無法辨識時當作 `false`，整份只記一行警告；`knownRansomwareCampaignUse` 無法辨識時當作 `false`，不記警告。
 - 必要欄位（`catalogVersion`、`vulnerabilities`、各筆的 `cveID`、`dateAdded`、`dueDate`）缺漏時，`kev` 失敗並讓 workflow 發出失敗通知。未知欄位忽略。
+- `vulnerabilities` 是空的，或筆數與 `count` 不符時同樣失敗，快照不變。被截斷的目錄若成為快照，恢復後整批會被當成新增。
 
 ### EPSS 檔案的實測結果
 

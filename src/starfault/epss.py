@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import io
 import re
+import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
@@ -41,7 +42,7 @@ def parse_csv(raw: bytes, wanted: Callable[[str], bool] = lambda _: True) -> Eps
     """
     try:
         text = gzip.decompress(raw).decode("utf-8")
-    except (OSError, EOFError, UnicodeDecodeError) as e:
+    except (OSError, EOFError, UnicodeDecodeError, zlib.error) as e:
         raise EpssFormatError(f"無法解壓縮：{e}") from e
     lines = io.StringIO(text)
     header = _HEADER.match(lines.readline().strip())
