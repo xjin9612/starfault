@@ -80,6 +80,22 @@ def test_cisa_adp_affected_and_cpe23() -> None:
     assert r.adp_affected[0].cpes == (("redhat", "openssl"),)
 
 
+def test_cpe_escapes_are_decoded() -> None:
+    r = parse_record(
+        cve(
+            "CVE-2026-90001",
+            cpes=[
+                r"cpe:2.3:a:lantern\:labs:lantern\\cms:*:*:*:*:*:*:*:*",
+                "cpe:/a:harbor%3aprint:harbor%2bprint:2.0",
+            ],
+        )
+    )
+    assert r.affected[0].cpes == (
+        ("lantern:labs", "lantern\\cms"),
+        ("harbor:print", "harbor+print"),
+    )
+
+
 def test_less_than_or_equal_ranges() -> None:
     r = parse_record(fixture_record("CVE-2024-11079"))
     assert r.affected[0].versions == "≤ 2.18.0"

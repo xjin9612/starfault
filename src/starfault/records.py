@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import unquote
 
 SEVERITIES = ("critical", "high", "medium", "low", "none")
 CISA_ADP = "CISA-ADP"
@@ -193,14 +194,34 @@ def _cwes(container: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def _cpe(value: str) -> tuple[str, str] | None:
-    """cpe:2.3:a:vendor:product:... 或 cpe:/a:vendor:product:... 的 (vendor, product)。"""
+    """cpe:2.3:a:vendor:product:... 或 cpe:/a:vendor:product:... 的 (vendor, product)。
+
+    跳脫規則依 NISTIR 7695：2.3 以反斜線跳脫，2.2 以百分比編碼。
+    https://nvlpubs.nist.gov/nistpubs/Legacy/IR/nistir7695.pdf
+    """
     if value.startswith("cpe:2.3:"):
-        parts = value.split(":")
+        parts = _split_cpe23(value)
         return (parts[3], parts[4]) if len(parts) > 4 else None
     if value.startswith("cpe:/"):
-        parts = value[5:].split(":")
+        parts = [unquote(p) for p in value[5:].split(":")]
         return (parts[1], parts[2]) if len(parts) > 2 else None
     return None
+
+
+def _split_cpe23(value: str) -> list[str]:
+    fields: list[str] = []
+    current: list[str] = []
+    chars = iter(value)
+    for ch in chars:
+        if ch == "\\":
+            current.append(next(chars, ""))
+        elif ch == ":":
+            fields.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    fields.append("".join(current))
+    return fields
 
 
 def _usable_version(version: dict[str, Any], key: str) -> str | None:
