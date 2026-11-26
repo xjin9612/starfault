@@ -155,6 +155,7 @@ flowchart TD
 - 第一行是 `#model_version:v2026.06.15,score_date:2026-11-25T12:00:23Z`，第二行是 `cve,epss,percentile`。
 - 2026-11-25 的檔案 `Last-Modified` 是 13:30:36 UTC，共 412,861 筆。daily workflow 排在 UTC 22:17，留下足夠的延遲空間。
 - `score_date` 的日期部分當作 EPSS 資料日期。
+- `epss` 或 `percentile` 不是 0 到 1 之間數字的列略過。
 
 ## 狀態檔
 

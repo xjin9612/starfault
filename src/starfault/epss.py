@@ -36,6 +36,7 @@ def parse_csv(raw: bytes, wanted: Callable[[str], bool] = lambda _: True) -> Eps
     """解析 gzip 壓縮的 EPSS CSV。
 
     第一行是 `#model_version:…,score_date:…` 註解，第二行是 `cve,epss,percentile` 欄名。
+    分數或百分位數不是 0 到 1 之間數字的列略過。
     格式不符或沒有任何分數時丟出 EpssFormatError。
     """
     try:
@@ -64,9 +65,12 @@ def parse_csv(raw: bytes, wanted: Callable[[str], bool] = lambda _: True) -> Eps
         if not wanted(cve_id):
             continue
         try:
-            scores[cve_id] = (float(parts[1]), float(parts[2]))
+            score, percentile = float(parts[1]), float(parts[2])
         except ValueError:
             continue
+        # 這個比較也排除 nan。
+        if 0 <= score <= 1 and 0 <= percentile <= 1:
+            scores[cve_id] = (score, percentile)
     if not total:
         raise EpssFormatError("沒有任何分數")
     return EpssData(header["model"], header["date"], scores)

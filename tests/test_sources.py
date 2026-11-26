@@ -82,6 +82,19 @@ def test_epss_real_file_header_and_filter() -> None:
     assert data.scores == {"CVE-2021-40539": (0.9896, 0.9996), "CVE-2014-3566": (0.99999, 1.0)}
 
 
+def test_epss_rows_outside_unit_range_are_skipped() -> None:
+    raw = gzip.compress(
+        b"#model_version:v1,score_date:2026-11-25T00:00:00Z\n"
+        b"cve,epss,percentile\n"
+        b"CVE-2026-90001,nan,0.5\n"
+        b"CVE-2026-90002,inf,0.5\n"
+        b"CVE-2026-90003,0.2,1.5\n"
+        b"CVE-2026-90004,-0.1,0.5\n"
+        b"CVE-2026-90005,0.2,0.7\n"
+    )
+    assert epss.parse_csv(raw).scores == {"CVE-2026-90005": (0.2, 0.7)}
+
+
 @pytest.mark.parametrize(
     "raw",
     [
