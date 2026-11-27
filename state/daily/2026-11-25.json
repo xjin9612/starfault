@@ -735,7 +735,7 @@
     ["CVE-2026-78092",6.1,"medium",null],
     ["CVE-2026-78093",6.1,"medium",null],
     ["CVE-2026-78094",6.1,"medium",null],
-    ["CVE-2026-78095",null,"none",null],
+    ["CVE-2026-78095",6.1,"medium",null],
     ["CVE-2026-78096",6.1,"medium",null],
     ["CVE-2026-78098",null,"none",null],
     ["CVE-2026-78099",null,"none",null],

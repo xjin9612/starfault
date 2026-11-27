@@ -551,7 +551,7 @@
     ["CVE-2026-136229",null,"none",null],
     ["CVE-2026-136230",null,"none",null],
     ["CVE-2026-136231",null,"none",null],
-    ["CVE-2026-14569",8.7,"high",null],
+    ["CVE-2026-14569",6.1,"medium",null],
     ["CVE-2026-18530",9.9,"critical",{"0.01":""}],
     ["CVE-2026-19881",8.6,"high",null],
     ["CVE-2026-49960",7.1,"high",null],
