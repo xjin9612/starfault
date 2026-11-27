@@ -15,7 +15,7 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
 - **New KEV entries, right away**: CISA KEV is checked hourly. Each new CVE gets its own alert with the due date and whether forensic triage is required.
 - **Daily digest**: new CVEs whose EPSS first crosses the threshold, and new CVEs with CVSS ≥ 9 that have no EPSS yet.
 - **Your stack**: when a product on your private list gets a new vulnerability, it goes to the top of the daily digest. The list lives only in a GitHub secret; it never appears on the site, in logs or in the repo.
-- **Website**: Today, watched CVEs, the KEV catalog, CVE detail pages (CVSS, EPSS trend, KEV action, affected products, timeline), and the alert rules with threshold calibration. The interface is in Traditional Chinese or English, and CVE titles and descriptions can be translated into the language set in `translation.target`.
+- **Website**: Today, watched CVEs, the KEV catalog, CVE detail pages, and the alert rules with threshold calibration. The interface is in Traditional Chinese or English, and CVE titles and descriptions can be translated into the language set in `translation.target`.
 - Everything runs on GitHub Actions. State is stored as JSON in the repo; no server or database is needed.
 
 ![Today page](docs/screenshots/en/today.png)
@@ -54,7 +54,8 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
 5. Under Settings → Pages → Build and deployment, set Source to **GitHub Actions**.
 6. First run:
    1. Actions → `Hourly` → Run workflow. The first run only records the KEV snapshot and sends no alerts.
-   2. Actions → `Daily` → Run workflow with `backfill_days` set to `30`. This reads the last 30 days of CVEs, so the chart on Today and the calibration table have data.
+   2. Actions → `Daily` → Run workflow with `backfill_days` set to `30`. This reads the last 30 days of CVEs, so the chart on Today and the CVSS rows of the calibration table have data.
+      - The run cannot tell when a backfilled CVE first crossed the EPSS threshold. Those above the threshold are added to the site without an alert, and the EPSS rows of the calibration table fill in over the following 7 days.
 
    Or with `gh`:
 
@@ -65,7 +66,7 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
 
 After that, `Hourly` runs at minute 23 of every hour and `Daily` runs every day at 22:17 UTC (06:17 in `Asia/Taipei`). Each run:
 
-- commits state to `state/` (the hourly run only commits when KEV, the notified list or the watch list changed);
+- commits state to `state/`;
 - sends Telegram alerts;
 - deploys the site to GitHub Pages.
 
@@ -116,7 +117,6 @@ note = "front proxy"                   # optional: shown in alerts
 - New CVEs that match and have CVSS ≥ `watchlist.cvss` (7.0 by default) or no score yet go to the top of the daily digest. When a matching CVE is added to KEV, the alert gets an extra "Matches your stack" line.
 - The list never appears on the site, in state files, in Actions logs or in commits: logs do not print product names, matching CVEs or match counts. CVEs that match only your stack are not added to the site; their alerts link to CVE.org and NVD.
 - If a daily digest contains only the "Your stack" section and Telegram fails, later runs do not resend it, and the run still succeeds. A failed run or a resend would show in public that something matched.
-- For local testing, put the list in `watchlist.toml` at the repository root. It is listed in `.gitignore`.
 
 ## Configuration
 
@@ -131,19 +131,9 @@ All settings live in `config.toml`, and every key has a comment. Unknown keys or
 
 Run times are the `cron` entries in `.github/workflows/hourly.yml` and `daily.yml`.
 
-## Running locally
+## Exit codes
 
-Set up the development environment as described in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Traditional Chinese), then run:
-
-```sh
-uv run starfault kev                      # read KEV and update the snapshot
-uv run starfault cve --backfill-days 3    # read the last 3 days of CVEs
-uv run starfault epss                     # read EPSS
-GEMINI_API_KEY=<key> uv run starfault translate
-uv run starfault site                     # build the site into _site/
-```
-
-`push` and `digest` send Telegram messages and need `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; `TELEGRAM_THREAD_ID` is optional.
+Every `starfault` command, as run by the workflows, exits with one of these codes. To run the commands locally, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Traditional Chinese).
 
 | Exit code | Meaning |
 |---|---|

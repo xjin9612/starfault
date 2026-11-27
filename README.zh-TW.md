@@ -15,7 +15,7 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
 - **KEV 新增即時推播**：每小時檢查 CISA KEV，新增的 CVE 一則一則推播，附期限、是否需鑑識。
 - **每日摘要**：EPSS 首次跨過門檻的新 CVE、CVSS ≥ 9 但還沒有 EPSS 的新 CVE。
 - **技術棧特別關注**：私人清單裡的產品出現新漏洞時，列在每日摘要最上面。清單只存在 GitHub secret，不出現在網站、log 或 repo。
-- **網站**：今日頁、關注 CVE、KEV 目錄、CVE 詳細頁（CVSS、EPSS 走勢、KEV 處置、受影響產品、時間軸）、推播規則與門檻校準。介面可選繁體中文或英文，CVE 標題與描述可翻成 `translation.target` 設定的語言。
+- **網站**：今日頁、關注 CVE、KEV 目錄、CVE 詳細頁、推播規則與門檻校準。介面可選繁體中文或英文，CVE 標題與描述可翻成 `translation.target` 設定的語言。
 - 全部在 GitHub Actions 上執行，狀態存成 repo 裡的 JSON，不需要伺服器或資料庫。
 
 ![今日頁](docs/screenshots/zh-TW/today.png)
@@ -54,7 +54,8 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
 5. 在 Settings → Pages → Build and deployment，把 Source 設為 **GitHub Actions**。
 6. 第一次執行：
    1. Actions → `Hourly` → Run workflow。第一次只建立 KEV 快照，不推播。
-   2. Actions → `Daily` → Run workflow，`backfill_days` 填 `30`：讀取近 30 天的 CVE，今日頁的圖表與門檻校準表就有資料。
+   2. Actions → `Daily` → Run workflow，`backfill_days` 填 `30`：讀取近 30 天的 CVE，今日頁的圖表與門檻校準表的 CVSS 列就有資料。
+      - 補讀的 CVE 無法得知何時首次跨過 EPSS 門檻：已達門檻的會加進網站但不推播，門檻校準表的 EPSS 列在之後 7 天逐步有資料。
 
    也可以用 `gh`：
 
@@ -65,7 +66,7 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
 
 之後 `Hourly` 每小時第 23 分執行，`Daily` 每天 UTC 22:17（`Asia/Taipei` 06:17）執行。每次執行會：
 
-- 把狀態 commit 到 `state/`（hourly 只在 KEV、已通知清單或關注清單有變動時 commit）；
+- 把狀態 commit 到 `state/`；
 - 發送 Telegram 推播；
 - 部署網站到 GitHub Pages。
 
@@ -116,7 +117,6 @@ note = "前端代理"                       # 選填：顯示在推播
 - 命中且 CVSS ≥ `watchlist.cvss`（預設 7.0）或還沒有分數的新 CVE，列在每日摘要最上面。列入 KEV 時，即時推播多一行「命中你的技術棧」。
 - 清單不會出現在網站、狀態檔、Actions log 或 commit：log 不印產品名稱、命中的 CVE 或命中數；只因技術棧命中的 CVE 不收錄進網站，推播連到 CVE.org 與 NVD。
 - 每日摘要只有「你的技術棧」段落時，Telegram 發送失敗後不再補發，workflow 照樣成功。失敗或補發都會公開透露有命中。
-- 本機測試時寫在 repo 根目錄的 `watchlist.toml`，它已列在 `.gitignore`。
 
 ## 設定
 
@@ -131,19 +131,9 @@ note = "前端代理"                       # 選填：顯示在推播
 
 執行時間寫在 `.github/workflows/hourly.yml` 與 `daily.yml` 的 `cron`。
 
-## 本機執行
+## 結束碼
 
-照 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 建立開發環境，再執行：
-
-```sh
-uv run starfault kev                      # 讀取 KEV，更新快照
-uv run starfault cve --backfill-days 3    # 讀取近 3 天的 CVE
-uv run starfault epss                     # 讀取 EPSS
-GEMINI_API_KEY=<key> uv run starfault translate
-uv run starfault site                     # 產生網站到 _site/
-```
-
-`push` 與 `digest` 發送 Telegram 訊息，需要 `TELEGRAM_BOT_TOKEN` 與 `TELEGRAM_CHAT_ID`；`TELEGRAM_THREAD_ID` 可不設定。
+workflow 執行的每個 `starfault` 指令都以下列結束碼結束。要在本機執行指令，見 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 | 結束碼 | 意義 |
 |---|---|

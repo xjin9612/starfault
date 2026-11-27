@@ -319,6 +319,8 @@ note = "前端代理"                  # 選填：顯示在推播
 
 共用參數：`--config`（預設 `config.toml`）、`--state`（預設 `state`）、`--watchlist`（預設 `watchlist.toml`）。
 
+`push` 與 `digest` 發送 Telegram 訊息，需要 `TELEGRAM_BOT_TOKEN` 與 `TELEGRAM_CHAT_ID`；`TELEGRAM_THREAD_ID` 可不設定。`translate` 需要 `GEMINI_API_KEY`，`translation.provider` 是 `anthropic` 時改為 `ANTHROPIC_API_KEY`。
+
 | 結束碼 | 意義 |
 |---|---|
 | `0` | 成功 |
