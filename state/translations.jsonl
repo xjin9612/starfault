@@ -1,0 +1,60 @@
+{"key": "0111dc296351d14c", "lang": "zh-TW", "text": "經過驗證的指令隱碼攻擊"}
+{"key": "02fab371798ddf4e", "lang": "zh-TW", "text": "經過身份驗證的指令隱碼攻擊"}
+{"key": "031740a9159b906a", "lang": "zh-TW", "text": "LaraDashboard 1.5.0 以前版本透過 module.json 命名空間解析的路徑Traversal RCE"}
+{"key": "0807275e9739e5c3", "lang": "zh-TW", "text": "@fastify/express 是一個允許應用程式在 Fastify 網頁框架內執行 Express 中介軟體與 Express 應用程式的外掛程式。在 4.0.14 之前的版本中，帶有空動態路由參數的請求會到達 Fastify 路由處理常式，而掛載於 Express Router 或子應用程式內該路徑的中介軟體卻會被略過，這是因為 Fastify 的路由器接受空值，而 Express 要求非空值，並且傳遞給外掛程式且未錨定的正規表示式掛載也會以相同方式遭到繞過。先前的修復僅涵蓋直接傳遞給外掛程式的掛載路徑，未涵蓋掛載在已路由之 Express 應用程式內的中介軟體。攻擊者可利用此漏洞繞過受影響路由上的驗證或其他基於中介軟體的存取控制，實際影響取決於空值在應用程式中所選擇的內容。此問題已在 @fastify/express 4.0.14 中修正，使用者應升級至 4.0.14 或更新版本。作為因應措施，可以在路由執行後執行的 Fastify 鉤子（例如 preHandler）中強制執行驗證、將中介軟體掛載於靜態父路徑，或在路由參數綱要中要求非空值。"}
+{"key": "0fb209da9d8cb01e", "lang": "zh-TW", "text": "在 D-Link R32 1.10B02 中發現了一個漏洞。受影響的元件是 DHMAPI Action Handler 元件的 SetTimeSettings 函式。對 TZLocation 參數的這種操作會導致作業系統指令注入。攻擊有可能遠端發起。此漏洞的攻擊程式已被發布並可能遭到利用。"}
+{"key": "1101f3d1eedd359d", "lang": "zh-TW", "text": "Jenkins Script Security Plugin 1436.v1082791135e4 與先前版本未能在使用部分限定類別名稱參考 @Builder 註解時拒絕 builderStrategy 成員指定任意類別，這使得具備定義與執行沙箱化指令碼（包含 Pipelines）權限的攻擊者，若元件的類別路徑上存在合適的類別，便能在沙箱之外執行程式碼。"}
+{"key": "11426855eea3e47c", "lang": "zh-TW", "text": "15.122.0 之前的 Frappe Framework 以及 16.50.0 之前的 16.x 版本在 Document.update() 中包含一個缺少授權的漏洞，該漏洞未能驗證呼叫者是否被允許提交或修改目標文件。攻擊者可以叫用文件更新操作來提交或變更他們未被授權更改的文件。"}
+{"key": "21e031bb1ad0bde6", "lang": "zh-TW", "text": "Zohocorp ManageEngine DDI Central 6301 以下版本受到授權繞過與 PowerShell 指令隱碼漏洞的影響，允許已通過驗證但非管理員的使用者針對未授權的 Windows DHCP 子網路進行攻擊，並可能透過精心構造的 DNS 後綴值在受管理的 Windows DHCP 伺服器上執行任意指令。"}
+{"key": "26ba0c3eab6dbe90", "lang": "zh-TW", "text": "JavaScript payload-mapping sandbox escape allows arbitrary code execution in the connectivity service"}
+{"key": "29fcd9c0736588cb", "lang": "zh-TW", "text": "Jenkins Script Security Plugin 1436.v1082791135e4 與先前版本未拒絕含有 builderStrategy 的 @Builder 註解..."}
+{"key": "2d3e985a15ee2a5a", "lang": "zh-TW", "text": "Budibase 版本 3.41.0 起至 4.0.0 以前包含一個身分驗證繞過漏洞，允許未經過身分驗證的攻擊者透過未驗證電子郵件的 OIDC/SSO 帳號連結，接管無密碼的全域 Builder 帳號。攻擊者可以在受信任的 IdP 聲稱受害者的電子郵件為 email_verified=false，藉此繞過 isAccountLinkable 白名單來控制所有應用程式、資料來源與自動化流程。"}
+{"key": "31a7a447a2b22f02", "lang": "zh-TW", "text": "Zohocorp Manageengine DDI Central 6500 版之前的組建受 Telnet 連線功能中的已驗證 PowerShell 指令隱碼漏洞影響，允許經過特製的 IPv6 範圍識別碼在受管理的 Windows 節點上執行任意指令。"}
+{"key": "336e9d94982eb3e5", "lang": "zh-TW", "text": "1.0.4 之前的 build-git-clone 在 clone() 函式中包含作業系統指令注入漏洞，允許攻擊者透過提供精心製作的儲存庫 URL 來執行指令。攻擊者可以在 url 引數中嵌入 shell 中繼字元（例如 ; 或 $()），這些字元會被串接至 sh -c 指令中，以 Node.js 行程權限執行作業系統指令。"}
+{"key": "3398c261107c67d4", "lang": "zh-TW", "text": "HKUDS nanobot 0.1.4 0.4.1 之前的版本在 OpenAI Codex Provider 中存在 TLS 驗證繞過漏洞"}
+{"key": "3727aeb3c2a08fd3", "lang": "zh-TW", "text": "在 D-Link R32 1.10B02 中發現了一個漏洞。受影響的元件是 DHMAPI Action Handler 的 /usr/bin/httpd 檔案中的 SetDeviceSettings 函式。對引數 TZLocation 的操縱會導致作業系統指令隱碼攻擊（OS Command Injection）。此攻擊有可能遠端發起。該漏洞利用程式已經公開，可能會被使用。"}
+{"key": "3c84b8886badd503", "lang": "zh-TW", "text": "Camunda 8.8.0 8.8.47 以前版本、8.9.0 8.9.29 組合以前版本、8.10.0 8.10.10 組合以前版本以及 8.11.0-alpha1 在持久化網頁工作階段（persistent web session）功能中包含一個不安全的反序列化漏洞。該功能將工作階段屬性以 Java 序列化資料形式儲存於次要儲存空間中，並透過未設定 ObjectInputFilter 的 ObjectInputStream 進行反序列化。具備網頁工作階段索引寫入權限的攻擊者（例如透過 Camunda 的 docker-compose 檔案部署且未經身份驗證的 Elasticsearch 叢集）可以植入精心製作的序列化物件，並透過提供相配的工作階段 Cookie 來觸發反序列化；結合如隨附的 Commons Collections 3.1-RC1 函式庫等 gadget 鏈，可導致以 Camunda 服務帳戶身分執行程式碼。"}
+{"key": "430f773e308faee0", "lang": "zh-TW", "text": "WP Job Portal <= 2.7.2 - 未經身份驗證的權限提升，透過帳戶接管攻擊利用 'wpjobportal-socialid' Cookie"}
+{"key": "4aa439893d1a9959", "lang": "zh-TW", "text": "3.8.10 之前的 SiYuan 包含跨網站指令碼漏洞，其中的 WebDAV 同步錯誤格式化功能略過了特定格式錯誤回應的 HTML 跳脫處理，將未處理的標記傳遞給 Electron 通知渲染器。攻擊者若透過網路竄改未加密的 HTTP WebDAV 回應，便能注入事件處理程式標記；當受害者手動啟動同步時，該標記就會以登入使用者的身份執行帶有 Node 整合功能的 JavaScript。"}
+{"key": "4ec6d1627b678a54", "lang": "zh-TW", "text": "Teracom TCW122B-CM 4.07 之前的韌體包含可預測的工作階段 cookie 漏洞，允許未經身份驗證的遠端攻擊者透過猜測由計數器（tick-counter）衍生的 cookie 來劫持管理員工作階段。攻擊者可以根據裝置執行時間和登入時機來預測或暴力破解 32 位元的 cookie，進而控制繼電器、設定與管理員憑證。"}
+{"key": "4f2bb192bf9669e3", "lang": "zh-TW", "text": "HKUDS nanobot 版本 0.1.4 起至 0.4.1 以前包含一個不當憑證驗證漏洞，存在於 OpenAI Codex 提供者中，該提供者在沒有 TLS 憑證或主機名稱驗證的情況下重試已驗證的請求。能夠攔截連線的攻擊者可觸發憑證失敗並冒充端點，以竊取 bearer token、讀取請求內容或竄改回應。"}
+{"key": "54afcfd91ef4c7ec", "lang": "zh-TW", "text": "D-Link R32 DHMAPI Action SetTimeSettings 作業系統指令注入"}
+{"key": "56044bf9b4a79087", "lang": "zh-TW", "text": "llama.cpp b11450 至 b12658 版本中的 ggml RPC 伺服器包含一個超出陣列邊界寫入漏洞，允許未經身份驗證的攻擊者透過零元素目的張量寫入任意堆積記憶體位址。攻擊者可以使用 BUFFER_GET_BASE 來得知緩衝區基底，然後發送帶有低於緩衝區基底的目的指標的 RPC_CMD_COPY_TENSOR，以使伺服器當機或執行程式碼。"}
+{"key": "5bd17d1cc8e617f3", "lang": "zh-TW", "text": "Twenty 2.63.0 之前的版本在多工作區模式下包含身份驗證繞過漏洞，允許未經身份驗證的攻擊者透過 signUp GraphQL 變異註冊受邀者的電子郵件，藉此取得待處理的邀請權杖。攻擊者可以提交洩漏的 personalInviteToken 至 signUpInWorkspace，以該邀請的角色（包含 Admin）加入工作區，並取得已驗證的電子郵件。"}
+{"key": "5e24d72e798ed9e7", "lang": "zh-TW", "text": "Coder 2.39.0 到 2.39.1 之前版本透過 API 錯誤洩漏資料庫密碼"}
+{"key": "6571998f3c4cc2c9", "lang": "zh-TW", "text": "C Driver 中的 OCSP 回應器授權驗證不當"}
+{"key": "7b40c21e28f027f9", "lang": "zh-TW", "text": "WordPress 的 WP Job Portal – AI-Powered Recruitment System for Company or Job Board website 外掛在 2.7.2（含）以前的所有版本中存在身分驗證繞過漏洞，進而導致帳戶遭接管。這是因為 `WPJOBPORTALuser::__construct()` 中存在缺陷，在套用 `sanitize_key()` 之前，針對 `wpjobportal-socialid` Cookie 的非空防禦機制會直接評估原始 Cookie 值——允許完全由 `[a-z0-9_-]` 以外字元組成的數值通過防禦，隨後被 `sanitize_key()` 縮減為空字串，並在 `WHERE socialid = ''` 資料庫查詢中被用作字面值，因而匹配到 `socialid` 欄位為空的第一個 Portal 帳戶。這使得未經身分驗證的攻擊者能夠被綁定至現有的 WP Job Portal 雇主或求職者帳戶，進而透過 `saveuser`→`syncWPUserName()` 路徑獲得建立、編輯與刪除受害者的公司、工作列表、履歷和應徵申請的權限，並能覆寫所連結的 WordPress 使用者之名字、姓氏與顯示名稱。由於透過非社交登入流程註冊的每個 Portal 帳戶都保留預設的空 `socialid` 值，因此此漏洞在幾乎所有安裝中皆具備可利用性；下游動作（例如 `savecompany` 和 `saveuser`）的 Nonce 檢查無法緩解此問題，因為這些 Nonce 是在已被挾持的工作階段中產生的，並針對攻擊者自身的後續請求進行驗證。成功利用此漏洞可讓攻擊者控制一個特定的、已具備權限的 WP Job Portal 雇主/求職者（綁定至特定的 WordPress 使用者）帳戶，但不會提升攻擊者原始帳戶的權限。"}
+{"key": "7c6fe32290deed83", "lang": "zh-TW", "text": "@fastify/express 存在漏洞，透過 Express 路由器與子應用程式中的空路由參數可繞過中介軟體"}
+{"key": "7f43a0d059d0cbfe", "lang": "zh-TW", "text": "Parse Server 9.0.0 至 9.11.1-alpha.4 之前的版本透過 Google Play Games Adapter 發生帳號劫持"}
+{"key": "89c5b9b43c2c65c5", "lang": "zh-TW", "text": "在 TOTOLINK N350RT 9.3.5u.6468_B20250827 與 9.3.5u.6466_B20250825 中偵測到安全性漏洞。受影響的元件為 /cgi-bin/cstecgi.cgi 檔案中的 setLanguageCfg 函式。對 lang 參數的此類操作會導致授權繞過。此攻擊可遠端執行。該漏洞攻擊程式已被公開揭露且可能遭到利用。"}
+{"key": "8dcc4ac0c7e8ddbf", "lang": "zh-TW", "text": "Frappe Framework 15.122.0 之前版本存在透過 Document.update() 的授權繞過漏洞"}
+{"key": "8edc026a175d1aa2", "lang": "zh-TW", "text": "lxd：OIDC 載體權杖驗證中的身分驗證不當"}
+{"key": "9139ef395055e974", "lang": "zh-TW", "text": "D-Link R32 DHMAPI Action httpd SetDeviceSettings 作業系統指令注入"}
+{"key": "939db07d069cb73c", "lang": "zh-TW", "text": "WordPress 的 PDF Invoice for WooCommerce + Drag and Drop Template Builder 外掛程式所有版本（包含 7.2.0）存在 PHP 物件植入漏洞，這是透過對未受信任的輸入進行反序列化所造成。這使得未經身份驗證的攻擊者能夠植入 PHP 物件。受影響的軟體中沒有已知的 POP 鏈，這意味著除非網站上安裝了包含 POP 鏈的其他外掛程式或佈景主題，否則此漏洞不會造成影響。如果透過安裝在目標系統上的額外外掛程式或佈景主題存在 POP 鏈，攻擊者可能會根據該 POP chain 執行刪除任意檔案、擷取敏感資料或執行程式碼等動作。版本 7.2.0 中的修補不完全，僅對 customer_note 路徑套用了 escape_pdf_note()；位於 woocommerce/shortcodes.php:975–978 的帳單地址路徑仍未修補，且利用此漏洞需要啟用訪客結帳功能，以及將訂單轉為保留狀態的付款方式（例如預設的 WooCommerce 直接銀行轉帳選項）。"}
+{"key": "9766a6f7a432f1b4", "lang": "zh-TW", "text": "pylxd：websocket 連線中的憑證驗證不當"}
+{"key": "98427dca6d6c7658", "lang": "zh-TW", "text": "Teracom TCW122B-CM 4.07 之前的版本具有可預測的工作階段 Cookie，會導致工作階段劫持"}
+{"key": "a109ad2b3818e97d", "lang": "zh-TW", "text": "Zohocorp Manageengine DDI Central 6500 以下組建版本受 Windows DDI Agent 的 clear_blocked_domains 功能中的經過驗證指令注入漏洞影響，允許透過特製的封鎖網域值在 Windows 系統上觸發任意指令執行。"}
+{"key": "a292c89f8690f412", "lang": "zh-TW", "text": "Canonical LXD 5.0.12、5.21.10、6.10.2 之前的版本中，OIDC bearer token 驗證的身份驗證不當漏洞，允許持有由已設定身份提供者簽署權杖的遠端攻擊者，透過出示為其他應用程式發行權杖、ID 權杖或未驗證的電子郵件宣告，來對 LXD API 進行身份驗證並取得未授權控制或模仿使用者。"}
+{"key": "a41fc370bbad878a", "lang": "zh-TW", "text": "MongoDB C Driver 未確認簽署所提供之憑證撤銷狀態回應的第三方是否獲得授權，可針對正在檢查的憑證進行回覆。因此，操作客戶端所連接之 TLS 端點的未經驗證第三方，可能會使已被撤銷的憑證遭到接受。這可能會導致應用程式的資料庫流量遭到非預期的洩漏，以及憑證撤銷決策失效。"}
+{"key": "aa62e419d32a11a8", "lang": "zh-TW", "text": "ToolJet 3.21.94-beta 以前版本透過基於 SSO 電子郵件的帳號連結漏洞遭帳號接管"}
+{"key": "adafb22545a9db44", "lang": "zh-TW", "text": "TOTOLINK N350RT cstecgi.cgi setLanguageCfg 授權"}
+{"key": "aeaa9043bea5d3aa", "lang": "zh-TW", "text": "3.21.94-beta 之前的 ToolJet 在其伺服器 OAuth SSO 登入模組中包含一個身分驗證繞過漏洞，該模組僅透過識別提供者（provider）所宣告的電子郵件來解析 Google 與 Git SSO 登入，而未檢查 email_verified 或綁定 SSO 主體。未經身分驗證的攻擊者可以將帶有受害者未驗證電子郵件且由受信任發行者發出的權杖提交至 SSO 回呼，藉此取得受害者的工作階段（session），包含管理員帳號。"}
+{"key": "b372c036306e5740", "lang": "zh-TW", "text": "Canonical pylxd 2.4.3 之前的版本在 websocket 連線中存在憑證驗證不當的問題，允許網路攻擊者透過冒充遠端 LXD 端點來讀取指令標準輸入（stdin）並偽造指令輸出。"}
+{"key": "b64eb10f69d39070", "lang": "zh-TW", "text": "7151 之前的 ZohoCorp ManageEngine Key Manager Plus 版本存在指令隱碼漏洞，允許具備憑證部署權限的已驗證使用者，在設定部署目標時，透過精心特製的輸入來執行任意指令。"}
+{"key": "b6666c83d9033bf0", "lang": "zh-TW", "text": "指令注入漏洞"}
+{"key": "b66956b6daa4d68d", "lang": "zh-TW", "text": "D-Link R32 flupl self 端點 httpd 作業系統指令注入漏洞"}
+{"key": "bda1a7f226591106", "lang": "zh-TW", "text": "build-git-clone 1.0.4 之前的版本在 clone() 中透過儲存庫 URL 存在作業系統指令注入漏洞"}
+{"key": "c3785707a5708bcf", "lang": "zh-TW", "text": "Budibase 3.41.0 至 4.0.0 以前版本透過未驗證電子郵件的 OIDC 連結漏洞遭帳號接管"}
+{"key": "c3c477e14ee533dd", "lang": "zh-TW", "text": "Budibase Server 3.39.18 起至 4.0.0 之前的版本包含原型污染漏洞，允許未通過身份驗證的攻擊者透過在 PUBLIC 查詢中提供 __proto__ 作為動態 JSON 鍵來清除 MongoDB 查詢篩選條件。攻擊者可以向查詢執行端點傳送單一請求，將篩選條件縮減為 {}，以讀取、更新或刪除集合中的每個文件。"}
+{"key": "c4ee6414ddb46411", "lang": "zh-TW", "text": "Camunda 8 透過網頁工作階段儲存區的不安全反序列化漏洞"}
+{"key": "cc7a327d47d8cfca", "lang": "zh-TW", "text": "在 D-Link R32 1.10B02 中發現了一個漏洞。這會影響 flupl self Endpoint 元件之 /usr/bin/httpd 檔案的未知函式。對引數 fpath 進行操縱會導致作業系統指令注入。攻擊可以遠端發起。該漏洞利用程式已經公開，可能會被使用。"}
+{"key": "cd9e7e9860ccc9cc", "lang": "zh-TW", "text": "Budibase Server 3.39.18 4.0.0 之前的版本透過 __proto__ 金鑰進行 MongoDB 濾除清除"}
+{"key": "d0476132b40f06e7", "lang": "zh-TW", "text": "Parse Server 3.10.0 版本（8.6.123 以前）以及 9.0.0 版本（9.11.1-alpha.4 以前）在 Google Play Games 驗證介面卡中包含一個驗證繞過漏洞，該介面卡未驗證提供的玩家 ID 是否屬於所提供的存取權杖。攻擊者可以使用自己的 Google Play Games 憑證登入，同時冒用其他使用者的玩家 ID，藉此接管該帳戶或將該玩家 ID 連結至自己的帳戶。"}
+{"key": "d3b98ad4c17508ed", "lang": "zh-TW", "text": "Ever Gauzy 是一個用於 ERP、CRM、HRM、ATS 與專案管理的開源企業管理平台。在 111.44.3 以前的版本中，位於 packages/core/src/lib/auth/strategies/jwt.strategy.ts 的每個請求 JWT 驗證功能，會接受來自 packages/core/src/lib/user/user.service.ts 中 UserService.getIfExists 的結果，而未強制要求 User.isActive 必須為 true 且 User.isArchived 必須為 false。當權杖（token）包含 organizationId 宣告時，啟用與封存狀態檢查會套用至 UserOrganization 記錄而非 User 實體。在管理員透過 PATCH /api/user/:id 停用帳戶之後，現有的存取權杖仍可在權杖到期前（預設最長可達 24 小時）以該帳戶先前的權限等級繼續對 API 請求進行驗證。此問題已在 111.44.3 版本中修復。"}
+{"key": "d3ca112cbf68b1b5", "lang": "zh-TW", "text": "PDF Invoice for WooCommerce + Drag and Drop Template Builder <= 7.2.0 - 未驗證的 PHP 物件注入，透過 WC Store API 結帳時的 'billing_address.first_name' 參數進行任意檔案刪除"}
+{"key": "d8e00bae7177daeb", "lang": "zh-TW", "text": "llama.cpp b11450 至 b12658 版本透過 RPC copy_tensor 產生超出範圍寫入 (Out-of-Bounds Write)"}
+{"key": "de845cb798c1cbb9", "lang": "zh-TW", "text": "Coder 2.29.27 以前版本、2.30.0 至 2.34.19 以前版本、2.35.0 至 2.37.11 預設版本、2.38.0 至 2.38.7 以前版本以及 2.39.0 至 2.39.1 以前版本，會在 API 金鑰中介軟體回應中回傳包含暫時性 AWS IAM 資料庫密碼的資料庫連線錯誤。在資料庫連線失敗期間，未經身份驗證的攻擊者可以傳送結構完整但無效的 API 金鑰來取得密碼，並存取 PostgreSQL 資料庫 15 分鐘。"}
+{"key": "e35a9f398325aa19", "lang": "zh-TW", "text": "1.5.0 之前的 LaraDashboard 在 module.json providers 與 composer.json psr-4 namespace 解析中包含路徑花園（path traversal）漏洞，該解析衍生目的資料夾名稱時未排除走訪字元。具備 module.create 權限的攻擊者可上傳精心製作的模組 ZIP，以將 PHP 檔案寫入 public 目錄，進而達成未經身份驗證的遠端程式碼執行。"}
+{"key": "e4550cce297c1d75", "lang": "zh-TW", "text": "SiYuan 3.8.10 之前的版本透過 WebDAV 同步錯誤通知存在 XSS 漏洞"}
+{"key": "f3a1501ce449dcbc", "lang": "zh-TW", "text": "Ever Gauzy：已停用的使用者帳號透過 JWT 驗證未重新檢查 isActive/isArchived，仍可保留完整的 API 存取權限"}
+{"key": "f871454d888d5bea", "lang": "zh-TW", "text": "Twenty 2.63.0 以前版本透過未經身份驗證的 signUp Mutation 進行邀請接管"}
