@@ -7,6 +7,7 @@
 <p align="center">English | <a href="README.zh-TW.md">繁體中文</a></p>
 
 <p align="center">
+  <a href="https://github.com/xjin9612/starfault/actions/workflows/ci.yml"><img src="https://github.com/xjin9612/starfault/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 

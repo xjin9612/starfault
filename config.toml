@@ -38,4 +38,4 @@ locale = "zh-TW"
 # 「今天」與每日統計依此時區判定。
 timezone = "Asia/Taipei"
 # 網站網址，Telegram 按鈕與分享標籤用它組成連結；空字串表示不附連結。
-url = ""
+url = "https://xjin9612.github.io/starfault/"
