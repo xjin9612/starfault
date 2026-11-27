@@ -38,6 +38,12 @@ python3 -m http.server -d _site 8000
 
 `tests/fixtures/` 的真實資料節錄可以用 `uv run python scripts/refresh_fixtures.py` 重新下載。更新後跑一次 pytest，依實際值調整斷言。
 
+README 的截圖 `docs/screenshots/<en|zh-TW>/` 由下面的指令產生：用瀏覽器測試的虛構資料（`tests/e2e/fixture_data.py`）建置網站，再截取今日頁與 CVE 詳細頁。需要先下載 Chromium。改了 `web/` 的外觀時重新產生。
+
+```sh
+uv run python -m scripts.screenshot
+```
+
 ## 相依套件
 
 - 直接相依寫在 `pyproject.toml`，開發用的工具在 `[dependency-groups] dev`。

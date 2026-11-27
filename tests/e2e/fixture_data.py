@@ -141,7 +141,11 @@ def write_state(root: Path) -> None:
         )
         flaw, flaw_tr = FLAWS[i % len(FLAWS)]
         title = f"{product} {flaw}"
-        desc = f"A {flaw.lower()} in {product} allows a remote attacker to compromise the service."
+        article = "An" if flaw[0] in "AEIOU" else "A"
+        desc = (
+            f"{article} {flaw.lower()} in {product} allows a remote attacker"
+            " to compromise the service."
+        )
         translations[translate.text_key(title)] = f"{product} {flaw_tr}"
         translations[translate.text_key(desc)] = (
             f"{product} 的{flaw_tr}漏洞，遠端攻擊者可以入侵服務。"

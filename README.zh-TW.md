@@ -18,6 +18,10 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
 - **網站**：今日頁、關注 CVE、KEV 目錄、CVE 詳細頁（CVSS、EPSS 走勢、KEV 處置、受影響產品、時間軸）、推播規則與門檻校準。介面可選繁體中文或英文，CVE 標題與描述可翻成 `translation.target` 設定的語言。
 - 全部在 GitHub Actions 上執行，狀態存成 repo 裡的 JSON，不需要伺服器或資料庫。
 
+![今日頁](docs/screenshots/zh-TW/today.png)
+
+![CVE 詳細頁](docs/screenshots/zh-TW/detail.png)
+
 ## 開始前須知
 
 - **費用**：公開 repo 使用 GitHub 提供的標準 runner 免費（[GitHub Actions 計費](https://docs.github.com/en/billing/concepts/product-billing/github-actions)）。hourly workflow 每天執行 24 次。

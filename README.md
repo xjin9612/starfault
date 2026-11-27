@@ -18,6 +18,10 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
 - **Website**: Today, watched CVEs, the KEV catalog, CVE detail pages (CVSS, EPSS trend, KEV action, affected products, timeline), and the alert rules with threshold calibration. The interface is in Traditional Chinese or English, and CVE titles and descriptions can be translated into the language set in `translation.target`.
 - Everything runs on GitHub Actions. State is stored as JSON in the repo; no server or database is needed.
 
+![Today page](docs/screenshots/en/today.png)
+
+![CVE detail page](docs/screenshots/en/detail.png)
+
 ## Before you start
 
 - **Cost**: public repositories use GitHub's standard runners for free ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)). The hourly workflow runs 24 times a day.
