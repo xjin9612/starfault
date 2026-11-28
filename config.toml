@@ -8,7 +8,7 @@ cvss = 9.0
 # EPSS 規則只看發布幾天內的 CVE。1 到 90。
 epss_window_days = 30
 # 這天之前，規則頁把門檻標示為暫定值。門檻定案後刪除這一行。
-calibrating_until = "2026-12-02"
+calibrating_until = "2026-12-04"
 
 [translation]
 # 關注清單的標題與描述翻成這個語言（BCP 47 語言代碼，例如 zh-TW、ja）。

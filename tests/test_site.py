@@ -94,7 +94,7 @@ def test_meta(site: Path) -> None:
         "cvss": 9.0,
         "epss_window_days": 30,
         "stack_cvss": 7.0,
-        "calibrating_until": "2026-12-02",
+        "calibrating_until": "2026-12-04",
     }
     assert meta["sources"]["kev"] | {"at": None} == {
         "at": None,

@@ -14,7 +14,7 @@ def test_repo_config_loads() -> None:
     assert cfg.thresholds.epss == 0.10
     assert cfg.thresholds.cvss == 9.0
     assert cfg.thresholds.epss_window_days == 30
-    assert cfg.thresholds.calibrating_until == date(2026, 12, 2)
+    assert cfg.thresholds.calibrating_until == date(2026, 12, 4)
     assert cfg.translation.target == "zh-TW"
     assert cfg.translation.models == ("gemini-3.5-flash-lite", "gemini-3.5-flash")
     assert cfg.watchlist.cvss == 7.0
