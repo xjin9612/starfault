@@ -26,7 +26,13 @@ uv run playwright install chromium
 uv run pytest -m e2e
 ```
 
-預覽網站：先依序執行 `kev`、`cve`、`epss` 建立 `state/`，再產生網站並起本機 server，開啟 `http://localhost:8000`。
+檢視網站的外觀：用瀏覽器測試的虛構資料建置繁中與英文網站，開啟 `http://localhost:8000/zh-TW/` 與 `http://localhost:8000/en/`。資料的「今天」固定在 fixture 的日期，所以會顯示來源停更的提示。
+
+```sh
+uv run python -m scripts.preview
+```
+
+用真實資料預覽：先依序執行 `kev`、`cve`、`epss` 建立 `state/`，再產生網站並起本機 server，開啟 `http://localhost:8000`。
 
 ```sh
 uv run starfault kev
