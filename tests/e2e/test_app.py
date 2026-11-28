@@ -309,6 +309,68 @@ def test_detail_content(open_page: OpenPage, base_url: str) -> None:
     assert pg.locator(".empty").count() == 1 and "找不到" in pg.inner_text(".empty")
 
 
+# ===== 版面 =====
+
+
+@pytest.mark.parametrize("route", ["", "#/cves", f"#/cve/{FOCUS}"])
+def test_content_width_is_capped_and_centered(
+    open_page: OpenPage, base_url: str, route: str
+) -> None:
+    pg = open_page(2560, 900)
+    _go(pg, base_url + route)
+    view = pg.evaluate("document.documentElement.clientWidth")
+    for sel in (".hdr-in", ".wrap", ".foot-in"):
+        box = pg.locator(sel).bounding_box()
+        assert box is not None and box["width"] == 1680, f"{sel} 最寬 1680px"
+        assert abs(box["x"] - (view - box["x"] - box["width"])) <= 1, f"{sel} 置中"
+
+
+@pytest.mark.parametrize("width", [1440, 2560])
+def test_detail_page_is_centered(open_page: OpenPage, base_url: str, width: int) -> None:
+    pg = open_page(width, 800)
+    _go(pg, base_url + f"#/cve/{FOCUS}")
+    box = pg.locator(".d-page").bounding_box()
+    view = pg.evaluate("document.documentElement.clientWidth")
+    assert box is not None and box["width"] < view - 200, "寬螢幕上詳細頁有寬度上限"
+    left, right = box["x"], view - box["x"] - box["width"]
+    assert abs(left - right) <= 1, f"詳細頁置中：左 {left}、右 {right}"
+    back = pg.locator(".d-page .back").bounding_box()
+    assert back is not None and back["x"] == box["x"], "返回按鈕和內文左緣對齊"
+
+
+def test_mini_bar_appears_after_the_title_scrolls_away(open_page: OpenPage, base_url: str) -> None:
+    pg = open_page(1440, 700)
+    _go(pg, base_url + "#/cves")
+    _click(pg, f'#view a[href="#/cve/{FOCUS}"]', f"#/cve/{FOCUS}")
+    mini = pg.locator(".d-mini")
+    expect(mini).to_be_hidden()
+    pg.evaluate("window.scrollTo(0, 400)")
+    expect(mini).to_be_visible()
+    expect(mini.locator(".d-mini-title")).to_have_text(pg.inner_text(".d-head h2"))
+    tabs = pg.locator("#subnav").bounding_box()
+    bar = mini.bounding_box()
+    side = pg.locator(".d-side").bounding_box()
+    assert tabs and bar and side
+    assert bar["y"] == tabs["y"] + tabs["height"], "固定列貼在分頁列下方"
+    assert bar["height"] <= 60, "固定列只佔一行"
+    assert side["y"] >= bar["y"] + bar["height"], "右欄不被固定列蓋住"
+    pg.evaluate("window.scrollTo(0, 0)")
+    expect(mini).to_be_hidden()
+    pg.evaluate("window.scrollTo(0, 400)")
+    expect(mini).to_be_visible()
+    mini.locator(".d-mini-back").click()
+    expect(pg).to_have_url(re.compile(r"#/cves$"))
+    _ready(pg)
+
+
+def test_mini_bar_is_not_used_on_narrow_screens(open_page: OpenPage, base_url: str) -> None:
+    pg = open_page(390, 800)
+    _go(pg, base_url + f"#/cve/{FOCUS}")
+    pg.evaluate("window.scrollTo(0, 600)")
+    pg.wait_for_function("window.scrollY === 600")
+    expect(pg.locator(".d-mini")).to_be_hidden()
+
+
 # ===== 搜尋 =====
 
 

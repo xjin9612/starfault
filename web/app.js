@@ -428,13 +428,14 @@ async function viewKev(route, meta, cves, kev) {
 /* =====================================================================
  * 頁面：CVE 詳細
  * ===================================================================== */
-function backHtml() {
+// cls：頁面上的返回按鈕用 back；固定列裡的那一份用 d-mini-back，兩者行為相同
+function backHtml(cls = 'back') {
   const from = history.state?.from;
   if (from) {
     const s = LOCALE === 'en' || /^[A-Za-z0-9]/.test(from.label) ? ' ' : '';
-    return `<button type="button" class="btn back" data-back>${ICON.back}${esc(t('detail.back', { sep: s, label: from.label }))}</button>`;
+    return `<button type="button" class="btn ${cls}" data-back>${ICON.back}<span>${esc(t('detail.back', { sep: s, label: from.label }))}</span></button>`;
   }
-  return `<a class="btn back" href="#/">${ICON.back}${t('detail.toToday')}</a>`;
+  return `<a class="btn ${cls}" href="#/">${ICON.back}<span>${t('detail.toToday')}</span></a>`;
 }
 function sparkHtml(hist, th) {
   if (hist.length < 2) return '';
@@ -453,7 +454,7 @@ async function viewCve(route, meta, cves, kev) {
   const base = cves.find(r => r.id === id) || (kev.find(k => k.id === id) && fromKev(kev.find(k => k.id === id)));
   let d = null;
   if (base) { try { d = await getData('cve/' + id); } catch (e) { if (!(e instanceof NotFound)) throw e; } }
-  if (!base || !d) return backHtml() + emptyHtml('quiet', t('detail.notFound'), t('detail.notFoundText', { id: `<b class="mono">${esc(route.id)}</b>` }), `<a class="btn" href="#/cves">${t('detail.toCves')}</a>`);
+  if (!base || !d) return `<div class="d-page">` + backHtml() + emptyHtml('quiet', t('detail.notFound'), t('detail.notFoundText', { id: `<b class="mono">${esc(route.id)}</b>` }), `<a class="btn" href="#/cves">${t('detail.toCves')}</a>`) + '</div>';
   route.id = id;
   const r = base, k = d.kev, th = meta.thresholds.epss;
   const ext = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${text}<span class="sr">${t('newTab')}</span></a>`;
@@ -482,7 +483,8 @@ async function viewCve(route, meta, cves, kev) {
       <li>${ext(`https://www.cve.org/CVERecord?id=${encodeURIComponent(id)}`, 'CVE.org')}</li>
       <li>${ext(`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(id)}`, 'NVD')}</li>
       ${k ? `<li>${ext('https://www.cisa.gov/known-exploited-vulnerabilities-catalog', 'CISA KEV')}</li>` : ''}</ul></nav>`;
-  return `${backHtml()}
+  return `<div class="d-page">${backHtml()}
+    <div class="d-mini" hidden><div class="d-mini-in">${backHtml('d-mini-back')}<span class="d-mini-title">${titleHtml(r)}</span></div></div>
     <div class="d-layout">
       <header class="d-head">
         <div class="cve-id">${esc(id)}</div>
@@ -496,7 +498,7 @@ async function viewCve(route, meta, cves, kev) {
         <section aria-labelledby="dDesc"><h3 id="dDesc">${t('detail.desc')}</h3>${desc}</section>
         ${affected}${cwe}${tl}${refs}
       </div>
-    </div>`;
+    </div></div>`;
 }
 
 /* =====================================================================
@@ -599,11 +601,17 @@ function measureSticky() {
   const subH = $('#subnav').offsetHeight;
   const filters = $('#filters');
   const desktop = matchMedia('(min-width: 721px)').matches;
-  document.documentElement.style.setProperty('--tabs-h', subH + 'px');
-  document.documentElement.style.setProperty('--sticky-h', (subH + (filters && desktop ? filters.offsetHeight : 0) + 8) + 'px');
+  const root = document.documentElement;
+  // 詳細頁的固定列是 fixed，不佔版面；捲動定位仍要讓出它的高度
+  const miniH = $('.d-mini') && desktop ? parseFloat(getComputedStyle(root).getPropertyValue('--mini-h')) : 0;
+  root.style.setProperty('--tabs-h', subH + 'px');
+  root.style.setProperty('--sticky-h', (subH + (filters && desktop ? filters.offsetHeight : 0) + miniH + 8) + 'px');
   updateStuck();
 }
 function updateStuck() {
+  // 詳細頁：標題捲到分頁列底下之後才顯示固定列
+  const mini = $('.d-mini');
+  if (mini) mini.hidden = !(matchMedia('(min-width: 721px)').matches && $('.d-head h2').getBoundingClientRect().bottom <= $('#subnav').offsetHeight);
   const f = $('#filters');
   if (!f) return;
   const top = parseFloat(getComputedStyle(f).top) || 0;

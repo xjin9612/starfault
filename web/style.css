@@ -17,7 +17,7 @@
   --font-sans: system-ui, -apple-system, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --radius-md: 10px; --radius-sm: 6px; --radius-pill: 999px;
-  --content-max: 2560px; --page-pad: clamp(16px, 2.5vw, 48px); --read-max: 76ch;
+  --content-max: 1680px; --page-pad: clamp(16px, 2.5vw, 48px); --read-max: 76ch; --mini-h: 56px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -288,10 +288,16 @@ button { font: inherit; color: inherit; }
 .tbl tr.cur td { font-weight: 700; background: var(--accent-soft); }
 
 /* ===== CVE 詳細頁 ===== */
-.back { margin: 20px 0 12px; }
+/* ===== CVE 詳細頁 ===== */
+/* 閱讀型頁面：寬度上限 = 內文 + 欄距 + 右欄，與 .d-layout 一致，在外框內置中 */
+.d-page, .sk-article, .d-mini-in { max-width: calc(var(--read-max) + 32px + 320px); margin-inline: auto; }
+/* 標題捲出畫面後才出現的固定列，放返回按鈕與標題 */
+.d-mini { display: none; }
+/* 返回文字含篩選條件時會很長：允許換行，不超出版面 */
+.back { margin: 20px 0 12px; max-width: 100%; height: auto; min-height: 40px; padding-block: 8px; white-space: normal; text-align: left; }
 .d-layout { display: grid; grid-template-columns: minmax(0, var(--read-max)) minmax(260px, 320px); grid-template-areas: 'head side' 'body side'; column-gap: 32px; align-items: start; justify-content: start; }
 .d-head { grid-area: head; }
-.d-side { grid-area: side; position: sticky; top: calc(var(--tabs-h, 49px) + 16px); display: grid; gap: 16px; }
+.d-side { grid-area: side; position: sticky; top: calc(var(--tabs-h, 49px) + var(--mini-h) + 16px); display: grid; gap: 16px; }
 .d-body { grid-area: body; }
 .d-head .cve-id { font-size: 14px; color: var(--muted); }
 .d-head h2 { margin: 2px 0 0; font-size: 28px; line-height: 36px; overflow-wrap: anywhere; }
@@ -358,6 +364,12 @@ button { font: inherit; color: inherit; }
 @media (min-width: 721px) {
   .filters { position: sticky; top: var(--tabs-h, 49px); z-index: 14; }
   .filters.is-stuck { border-bottom-color: var(--border); }
+  .d-mini { position: fixed; top: var(--tabs-h, 49px); left: 0; right: 0; z-index: 13; padding-inline: var(--page-pad); background: var(--bg); border-bottom: 1px solid var(--border); }
+  .d-mini:not([hidden]) { display: block; }
+  .d-mini-in { height: var(--mini-h); display: flex; align-items: center; gap: 16px; }
+  .d-mini-back { flex: 0 1 auto; max-width: 45%; height: 36px; }
+  .d-mini-back > span, .d-mini-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-mini-title { flex: 1 1 auto; font-size: 18px; font-weight: 600; }
 }
 @media (max-width: 1400px) {
   .sections { grid-template-columns: 1fr 1fr; }
