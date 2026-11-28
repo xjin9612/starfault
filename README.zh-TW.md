@@ -65,7 +65,7 @@ starfault 是每日 CVE 儀表板：追蹤已遭利用（CISA KEV）、EPSS 升�
    gh workflow run daily.yml -R <owner>/<repo> -f backfill_days=30
    ```
 
-之後 `Hourly` 每小時第 23 分執行，`Daily` 每天 UTC 22:17（`Asia/Taipei` 06:17）執行。每次執行會：
+之後 `Hourly` 在每小時第 23 分與第 53 分執行；`Daily` 每天 UTC 22:17（`Asia/Taipei` 06:17）執行，UTC 03:47 有一次備援。GitHub 負載高時會丟棄部分排程，所以兩個 workflow 都排了不只一次；每日摘要仍然一天只發一則。每次執行會：
 
 - 把狀態 commit 到 `state/`；
 - 發送 Telegram 推播；

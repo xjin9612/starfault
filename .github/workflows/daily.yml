@@ -4,6 +4,8 @@ on:
   schedule:
     # 每天 UTC 22:17（台灣時間 06:17）：EPSS 在 UTC 13 點左右更新，台灣的前一天在 UTC 16:00 結束。
     - cron: "17 22 * * *"
+    # 備援：UTC 03:47（台灣時間 11:47）。主排程被丟棄時補上；主排程已發過摘要時只更新資料與翻譯。
+    - cron: "47 3 * * *"
   workflow_dispatch:
     inputs:
       backfill_days:

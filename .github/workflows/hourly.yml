@@ -2,8 +2,10 @@ name: Hourly
 
 on:
   schedule:
-    # 每小時第 23 分。負載高時 GitHub 會延後排程的執行，每小時開頭負載最高。
-    - cron: "23 * * * *"
+    # 每小時第 23 分與第 53 分。負載高時 GitHub 會延後或丟棄排程的執行，每小時開頭負載最高；
+    # 一小時排兩次，其中一次被丟棄時 KEV 推播不必等到下一個小時。
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
+    - cron: "23,53 * * * *"
   workflow_dispatch:
 
 permissions:

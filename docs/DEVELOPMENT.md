@@ -309,6 +309,7 @@ note = "前端代理"                  # 選填：顯示在推播
   - 發送成功後、寫入狀態前 job 被終止。
 - 摘要只有技術棧段落時，發送失敗照樣寫入 `digest.json`，結束碼 `0`，這則摘要不補發。不寫入與失敗的結束碼都公開，會透露有命中。
 - 未設定 `TELEGRAM_BOT_TOKEN` 或 `TELEGRAM_CHAT_ID` 時，`push` 與 `digest` 略過發送並回傳 `0`，狀態不變。
+- 每日摘要一天一則：`last_day` 已經是昨天時，`digest` 不做任何事，daily 的備援排程因此不會重發。讀取 delta 失敗而沒有推進 `last_day` 時，下一次執行重新處理。
 - 每日摘要：三類都沒有時不發送，`last_day` 照常前進。「你的技術棧」有內容時有通知音，否則靜音。EPSS 資料日期比今天早超過 1 天時，摘要最後註明 EPSS 日期。
 - 按鈕網址用 `site.url`；`site.url` 為空字串時不附網站按鈕，CVE 編號不加連結。
 
@@ -343,8 +344,8 @@ log 會出現在公開 repo 的 Actions 頁面：不印技術棧名稱、命中�
 | workflow | 觸發 | 內容 |
 |---|---|---|
 | `ci.yml` | push 到 `main`、pull request | ruff、mypy、pytest；另一個 job 跑瀏覽器測試 |
-| `hourly.yml` | 每小時第 23 分、`workflow_dispatch` | KEV、推播、CVE delta、部署網站 |
-| `daily.yml` | 每天 UTC 22:17、`workflow_dispatch` | CVE delta、EPSS、翻譯、每日摘要、部署網站。手動執行時可填 `backfill_days`，重新讀取今天以前幾個 UTC 日的 delta（1 到 90） |
+| `hourly.yml` | 每小時第 23 分與第 53 分、`workflow_dispatch` | KEV、推播、CVE delta、部署網站 |
+| `daily.yml` | 每天 UTC 22:17，備援 UTC 03:47；`workflow_dispatch` | CVE delta、EPSS、翻譯、每日摘要、部署網站。手動執行時可填 `backfill_days`，重新讀取今天以前幾個 UTC 日的 delta（1 到 90） |
 
 - 只在 `main` 執行；從其他分支手動執行時整個 job 略過。
 - checkout 取分支最新的 commit，重跑或排隊的執行也看得到先前已 push 的狀態。

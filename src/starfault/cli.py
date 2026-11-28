@@ -348,6 +348,10 @@ def cmd_digest(args: argparse.Namespace, cfg: Config, env: _Env) -> int:
         log.info("未設定 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，略過每日摘要")
         return 0
     now = env.now()
+    # 備援排程在同一天再跑一次時不再發送：每日摘要一天一則。
+    if state.load_digest_day() == _today(cfg, now) - timedelta(days=1):
+        log.info("今天的每日摘要已處理，略過")
+        return 0
     http = env.http()
 
     def load_records(days: list[date]) -> Mapping[str, CveRecord]:

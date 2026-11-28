@@ -65,7 +65,7 @@ starfault is a daily CVE dashboard. It tracks exploited vulnerabilities (CISA KE
    gh workflow run daily.yml -R <owner>/<repo> -f backfill_days=30
    ```
 
-After that, `Hourly` runs at minute 23 of every hour and `Daily` runs every day at 22:17 UTC (06:17 in `Asia/Taipei`). Each run:
+After that, `Hourly` runs at minutes 23 and 53 of every hour, and `Daily` runs every day at 22:17 UTC (06:17 in `Asia/Taipei`) with a backup run at 03:47 UTC. GitHub drops some scheduled runs under load, so each workflow has more than one slot; the daily digest is still sent once a day. Each run:
 
 - commits state to `state/`;
 - sends Telegram alerts;

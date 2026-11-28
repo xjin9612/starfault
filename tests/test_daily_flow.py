@@ -175,6 +175,22 @@ def test_digest_sections(run: Run, fake: FakeSources, telegram: None) -> None:
     assert msg.buttons == [{"text": "今日", "url": SITE_URL}]
 
 
+def test_digest_is_sent_once_a_day(
+    run: Run, fake: FakeSources, workdir: Path, telegram: None
+) -> None:
+    """備援排程在同一天再跑一次：之後才符合 Critical 規則的 CVE 留到隔天的摘要。"""
+    _sources(fake)
+    _daily(run)
+    late = cve("CVE-2026-91190", published="2026-11-25T23:00:00Z", score=9.9)
+    fake.hourly[(date(2026, 11, 26), 3)] = [late]
+    backup = datetime(2026, 11, 26, 3, 47, tzinfo=UTC)
+    assert run("cve", now=backup) == 0
+    assert run("digest", now=backup, watchlist=WATCHLIST) == 0
+    assert len(fake.sent) == 1
+    assert run("digest", now=NEXT_DAY, watchlist=WATCHLIST) == 0
+    assert "CVE-2026-91190" in fake.sent[1].text
+
+
 def test_rerun_does_not_resend(run: Run, fake: FakeSources, telegram: None) -> None:
     _sources(fake)
     _daily(run)
