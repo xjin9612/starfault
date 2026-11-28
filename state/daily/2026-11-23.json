@@ -23,7 +23,7 @@
     ["CVE-2026-118889",4.2,"medium",null],
     ["CVE-2026-119068",7.5,"high",null],
     ["CVE-2026-119069",5.3,"medium",null],
-    ["CVE-2026-120382",9.8,"critical",null],
+    ["CVE-2026-120382",9.8,"critical",{"0.01":"2026-11-27"}],
     ["CVE-2026-121456",5.8,"medium",null],
     ["CVE-2026-121480",5.3,"medium",null],
     ["CVE-2026-121613",9.3,"critical",null],
