@@ -61,6 +61,7 @@ state/                    狀態檔，由 workflow commit
 web/                      前端：index.html、style.css、i18n.js、app.js
 assets/                   icon、社群分享圖、bot 頭像
 scripts/                  開發用腳本
+docs/                     開發說明、設計規則（DESIGN.md）、頁面規格（pages.md）、README 截圖
 tests/                    pytest；fixtures/ 是真實資料的節錄；e2e/ 是瀏覽器測試
 ```
 
@@ -276,7 +277,7 @@ note = "前端代理"                  # 選填：顯示在推播
 
 ## 前端
 
-與 starstrata 同一套做法：純 HTML/CSS/JS，不經過建置，不載入外部字型或 CDN。視覺與元件沿用 starstrata 家族的設計，`web/` 是唯一的實作。
+與 starstrata 同一套做法：純 HTML/CSS/JS，不經過建置，不載入外部字型或 CDN。視覺與元件沿用 starstrata 家族的設計，`web/` 是唯一的實作。設計規則見 [DESIGN.md](DESIGN.md)，頁面規格與驗收清單見 [pages.md](pages.md)。
 
 - 介面文字只寫在 `i18n.js`，兩種語言的 key 與變數必須相同。`tests/test_web_files.py` 檢查 key 一致、程式用到的 key 都存在、英文沒有中文。
 - 介面語言取自 `site_page` 寫入的 `<html lang>`。
